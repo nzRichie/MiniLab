@@ -1,0 +1,35 @@
+title    = "ARP hijacking"
+layer     = "L2"
+summary   = "Poison a victim's ARP cache to MITM its traffic to the gateway, then stop it with static ARP entries or OVS ARP inspection."
+images    = ["miniinterneteth/d_switch", "d_host_arp"]
+handout   = "handout.pdf"
+
+# One flat broadcast domain on a single Open vSwitch switch. Addresses are fixed
+# so the handout can reference them and a lab script knows every IP before the
+# container exists.
+[topology]
+switch = "100_L2_LAB_S1"
+subnet = "100.0.0.0/24"
+
+  [topology.attacker]
+  ip  = "100.0.0.10"
+  ctn = "100_L2_LAB_attacker"
+
+  [topology.victim]
+  ip  = "100.0.0.20"
+  ctn = "100_L2_LAB_victim"
+
+  [topology.gateway]
+  ip  = "100.0.0.1"
+  ctn = "100_L2_LAB_gateway"
+
+# Lifecycle actions map one-to-one to wrapper scripts, matching miniManager's
+# item-to-script contract (arguments are passed positionally). Paths are relative
+# to this lab directory.
+[actions]
+spawn        = "scripts/spawn.sh"
+status       = "scripts/status.sh"
+shell_in     = "scripts/shell.sh"
+reset        = "scripts/reset.sh"
+teardown     = "scripts/teardown.sh"
+open_handout = "scripts/handout.sh"

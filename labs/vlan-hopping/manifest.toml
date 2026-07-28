@@ -1,0 +1,49 @@
+title     = "VLAN hopping"
+layer     = "L2"
+summary   = "Hop from VLAN 10 into VLAN 20 with a double-tagged frame across a trunk whose native VLAN equals the attacker's, then stop it with strict access ports or by moving the native VLAN off the attacker's VLAN."
+images    = ["miniinterneteth/d_switch", "d_host_vlan"]
+handout   = "handout.pdf"
+
+# Two Open vSwitch switches joined by an 802.1Q trunk. The attacker is on VLAN 10
+# behind S1; the victim is on VLAN 20 behind S2, with a benign VLAN 10 peer beside
+# it as the honest-traffic control. A double-tagged frame only hops across the
+# switch boundary, so the trunk (and its native VLAN) is the load-bearing piece:
+# the attack works only while the trunk's native VLAN equals the attacker's VLAN.
+# Addresses and VLAN ids are fixed so the handout can name them and a script knows
+# them before a container exists.
+[topology]
+access_switch = "103_L2_LAB_S1"     # holds the attacker's port
+victim_switch = "103_L2_LAB_S2"     # holds the peer and victim ports
+vlan10_subnet = "103.10.0.0/24"     # attacker + peer
+vlan20_subnet = "103.20.0.0/24"     # victim (the hop target)
+trunk         = "S1 <-> S2, carries VLAN 10 and 20"
+native_vlan   = 10                  # vulnerable: equal to the attacker's access VLAN; move it off to defend
+
+  [topology.attacker]
+  ip   = "103.10.0.10"
+  vlan = 10
+  ctn  = "103_L2_LAB_attacker"
+  role = "crafts the double-tagged frame; its port is the lax one"
+
+  [topology.peer]
+  ip   = "103.10.0.11"
+  vlan = 10
+  ctn  = "103_L2_LAB_peer"
+  role = "benign same-VLAN host; the honest reach a defence must not break"
+
+  [topology.victim]
+  ip   = "103.20.0.20"
+  vlan = 20
+  ctn  = "103_L2_LAB_victim"
+  role = "the hop target; receives the frame it never asked for"
+
+# Lifecycle actions map one-to-one to wrapper scripts, matching miniManager's
+# item-to-script contract (arguments are passed positionally). Paths are relative
+# to this lab directory.
+[actions]
+spawn        = "scripts/spawn.sh"
+status       = "scripts/status.sh"
+shell_in     = "scripts/shell.sh"
+reset        = "scripts/reset.sh"
+teardown     = "scripts/teardown.sh"
+open_handout = "scripts/handout.sh"

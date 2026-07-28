@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+# MiniLabs launcher. It does the two things that are easy to get wrong by hand:
+#   1. changes to the release root, because the engine loads ./config.toml from
+#      its working directory and resolves the menu's script paths against it;
+#   2. elevates, because Spawn and Teardown create veth pairs and network
+#      namespaces on the host.
+# Run it from anywhere: ./minilabs, or /path/to/MiniLabs/minilabs.
+set -euo pipefail
+
+ROOT="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
+cd "$ROOT"
+
+[ -x ./minimanager ] || { echo "minimanager is missing from $ROOT" >&2; exit 1; }
+[ -f ./config.toml ] || { echo "config.toml is missing from $ROOT" >&2; exit 1; }
+
+if [ "$( id -u )" -eq 0 ]; then
+    exec ./minimanager
+fi
+
+command -v sudo >/dev/null 2>&1 \
+    || { echo "not running as root and sudo is not installed; re-run as root" >&2; exit 1; }
+exec sudo ./minimanager

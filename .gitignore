@@ -1,0 +1,8 @@
+# LaTeX build artifacts, if a handout is rebuilt in place.
+*.aux
+*.fdb_latexmk
+*.fls
+*.log
+*.out
+*.synctex.gz
+*.toc

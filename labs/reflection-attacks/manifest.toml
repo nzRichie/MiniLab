@@ -1,0 +1,51 @@
+title    = "Source spoofing and reflection"
+layer     = "L3"
+summary   = "Forge source addresses to bounce amplified DNS and NTP replies off reflectors onto a victim, then stop it with source-address verification (strict uRPF or an nftables ACL) at the router's customer edge."
+images    = ["miniinterneteth/d_switch", "d_host_reflect"]
+handout   = "handout.pdf"
+
+# Layer 3: one router forwards between two subnets. The attacker is on the customer
+# edge; the victim and the two reflectors share the core segment behind the router.
+# Addresses are fixed so the handout can name them and a script knows every IP
+# before the container exists. The defence acts on the router's cust interface.
+[topology]
+switch          = "102_L3_LAB_S1"
+customer_subnet = "102.0.0.0/24"
+core_subnet     = "102.1.0.0/24"
+ingress_iface   = "cust"          # where source-address verification belongs
+
+  [topology.attacker]
+  ip   = "102.0.0.10"
+  ctn  = "102_L3_LAB_attacker"
+  role = "forges source addresses; crafts the reflected DNS/NTP queries"
+
+  [topology.router]
+  ip   = "102.0.0.1 (cust), 102.1.0.1 (core)"
+  ctn  = "102_L3_LAB_router"
+  role = "forwards between the subnets; the device the learner hardens with uRPF or an ACL"
+
+  [topology.victim]
+  ip   = "102.1.0.20"
+  ctn  = "102_L3_LAB_victim"
+  role = "reflection target; the address the attacker forges as source"
+
+  [topology.dns]
+  ip   = "102.1.0.53"
+  ctn  = "102_L3_LAB_dns"
+  role = "DNS reflector; serves the oversized amplify.lab TXT record plus the real 2026-07-28 TXT sets of google.com, spotify.com, and amazon.com for comparing which name amplifies most"
+
+  [topology.ntp]
+  ip   = "102.1.0.123"
+  ctn  = "102_L3_LAB_ntp"
+  role = "NTP reflector; answers a mode-6 readvar with its whole variable list"
+
+# Lifecycle actions map one-to-one to wrapper scripts, matching miniManager's
+# item-to-script contract (arguments are passed positionally). Paths are relative
+# to this lab directory.
+[actions]
+spawn        = "scripts/spawn.sh"
+status       = "scripts/status.sh"
+shell_in     = "scripts/shell.sh"
+reset        = "scripts/reset.sh"
+teardown     = "scripts/teardown.sh"
+open_handout = "scripts/handout.sh"

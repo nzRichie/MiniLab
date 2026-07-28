@@ -1,0 +1,41 @@
+title    = "DHCP starvation and rogue DHCP"
+layer     = "L2"
+summary   = "Drain a DHCP server's address pool with spoofed clients, then hand the victim the attacker as its default gateway, and stop both with switch-side DHCP snooping."
+images    = ["miniinterneteth/d_switch", "d_host_dhcp"]
+handout   = "handout.pdf"
+
+# One flat broadcast domain on a single Open vSwitch switch. Addresses are fixed
+# so the handout can reference them and a lab script knows every IP before the
+# container exists. The victim has no fixed address: it leases one over DHCP,
+# which is the surface the attack targets.
+[topology]
+switch      = "101_L2_LAB_S1"
+subnet      = "101.0.0.0/24"
+legit_pool  = "101.0.0.100-101.0.0.120"
+rogue_pool  = "101.0.0.150-101.0.0.200"
+
+  [topology.server]
+  ip  = "101.0.0.1"
+  ctn = "101_L2_LAB_server"
+  role = "legitimate DHCP server; hands itself out as the default gateway"
+
+  [topology.attacker]
+  ip  = "101.0.0.66"
+  ctn = "101_L2_LAB_attacker"
+  role = "floods the pool, then runs a rogue server offering itself as the gateway"
+
+  [topology.victim]
+  ip  = "leased via DHCP"
+  ctn = "101_L2_LAB_victim"
+  role = "a client; whatever gateway a DHCP server names is the gateway it trusts"
+
+# Lifecycle actions map one-to-one to wrapper scripts, matching miniManager's
+# item-to-script contract (arguments are passed positionally). Paths are relative
+# to this lab directory.
+[actions]
+spawn        = "scripts/spawn.sh"
+status       = "scripts/status.sh"
+shell_in     = "scripts/shell.sh"
+reset        = "scripts/reset.sh"
+teardown     = "scripts/teardown.sh"
+open_handout = "scripts/handout.sh"

