@@ -9,7 +9,9 @@ source "$( dirname "${BASH_SOURCE[0]}" )/lib.sh"
 echo "[teardown] removing lab containers"
 docker rm -f "$SW_CTN" "$SERVER_CTN" "$VICTIM_CTN" "$ATTACKER_CTN" 2>/dev/null || true
 
-echo "[teardown] cleaning dangling netns symlinks"
-find /var/run/netns -xtype l -delete 2>/dev/null || true
+# The wiring helper is normally already gone (spawn stops it through an EXIT
+# trap). Remove it if an interrupted spawn left it behind. Nothing to clean
+# under /run/netns: the netns symlinks only ever existed inside the helper.
+docker rm -f "$HELPER_CTN" >/dev/null 2>&1 || true
 
 echo "[teardown] done"

@@ -9,26 +9,25 @@ document.
 
 ## Requirements
 
-- Linux with Docker running, and your user in the `docker` group
-- `openvswitch-switch` (Ubuntu) or `openvswitch` (Arch): `spawn` checks for
-  `ovs-vsctl` on PATH before it starts
-- `iproute2` for `ip link` and `ip netns` (installed by default on both)
-- `sudo`, or run the launcher as root
+Docker, and an account in the `docker` group. That is the whole list.
 
-On Ubuntu:
+You do not need root or `sudo` to run a lab. Creating the virtual links between
+lab containers needs privileges your account will not have, so each lab does that
+work inside a short-lived privileged container that it removes when the lab is up.
 
 ```bash
-sudo apt install docker.io openvswitch-switch
+# Ubuntu
+sudo apt install docker.io
+sudo usermod -aG docker "$USER"   # log out and back in
+
+# Arch
+sudo pacman -S docker
+sudo systemctl enable --now docker
 sudo usermod -aG docker "$USER"   # log out and back in
 ```
 
-On Arch:
-
-```bash
-sudo pacman -S docker openvswitch
-sudo systemctl enable --now docker ovs-vswitchd
-sudo usermod -aG docker "$USER"   # log out and back in
-```
+Check it worked with `docker info`. If that prints a daemon summary rather than a
+permission error, you are ready.
 
 ## Running a lab
 
@@ -36,8 +35,7 @@ sudo usermod -aG docker "$USER"   # log out and back in
 ./minilabs
 ```
 
-The launcher elevates with `sudo` and starts the menu. Pick a lab to open its
-actions:
+Pick a lab to open its actions:
 
 - **Spawn** creates the lab's containers and wires them together. The first spawn
   of a lab also pulls the upstream switch image and builds that lab's host image,

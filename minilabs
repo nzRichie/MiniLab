@@ -1,9 +1,11 @@
 #!/usr/bin/env bash
-# MiniLabs launcher. It does the two things that are easy to get wrong by hand:
-#   1. changes to the release root, because the engine loads ./config.toml from
-#      its working directory and resolves the menu's script paths against it;
-#   2. elevates, because Spawn and Teardown create veth pairs and network
-#      namespaces on the host.
+# MiniLabs launcher. Its job is to start the engine from the release root,
+# because the engine loads ./config.toml from its working directory and resolves
+# the menu's script paths against that same directory.
+#
+# It does not elevate and does not need to. Spawn does its veth and network
+# namespace plumbing inside a short-lived privileged container, so membership of
+# the `docker` group is the only privilege a learner needs.
 # Run it from anywhere: ./minilabs, or /path/to/MiniLabs/minilabs.
 set -euo pipefail
 
@@ -13,10 +15,11 @@ cd "$ROOT"
 [ -x ./minimanager ] || { echo "minimanager is missing from $ROOT" >&2; exit 1; }
 [ -f ./config.toml ] || { echo "config.toml is missing from $ROOT" >&2; exit 1; }
 
-if [ "$( id -u )" -eq 0 ]; then
-    exec ./minimanager
+if ! docker info >/dev/null 2>&1; then
+    echo "Cannot reach the Docker daemon. Check that Docker is running and that" >&2
+    echo "your account is in the 'docker' group:" >&2
+    echo "    sudo usermod -aG docker \"\$USER\"    # then log out and back in" >&2
+    exit 1
 fi
 
-command -v sudo >/dev/null 2>&1 \
-    || { echo "not running as root and sudo is not installed; re-run as root" >&2; exit 1; }
-exec sudo ./minimanager
+exec ./minimanager

@@ -14,8 +14,14 @@ source "$( dirname "${BASH_SOURCE[0]}" )/lib.sh"
 
 log() { echo "[spawn] $*"; }
 
-command -v ovs-vsctl >/dev/null 2>&1 || { echo "ovs-vsctl not found on host" >&2; exit 1; }
-command -v docker    >/dev/null 2>&1 || { echo "docker not found on host" >&2; exit 1; }
+# Open vSwitch is NOT required on the host: every ovs-vsctl call in this lab runs
+# inside the switch container, whose image ships OVS. Docker reachability is the
+# real prerequisite, and it covers group membership as well as a stopped daemon.
+command -v docker >/dev/null 2>&1 || { echo "docker not found on host" >&2; exit 1; }
+docker info >/dev/null 2>&1 || {
+    echo "cannot reach the Docker daemon; is it running and are you in the 'docker' group?" >&2
+    exit 1
+}
 
 if docker ps -a --format '{{.Names}}' | grep -qx "$SW1_CTN"; then
     echo "Lab already spawned ($SW1_CTN exists). Run teardown.sh first." >&2
@@ -58,17 +64,22 @@ for sw_ctn in "$SW1_CTN" "$SW2_CTN"; do
         -- set-fail-mode br0 standalone >/dev/null
 done
 
-mkdir -p /var/run/netns
+# The veth/namespace plumbing runs in a privileged helper container rather than
+# on the host, so the learner needs docker access and nothing else. helper_stop
+# is trapped so the helper goes away however this script exits.
+helper_start
+trap helper_stop EXIT
+
 i=0
 
 # Put one end of a fresh veth pair into a container's netns and rename it.
 plug() {
     local ctn="$1" want_if="$2" tmp="$3" pid
     pid="$(docker inspect -f '{{.State.Pid}}' "$ctn")"
-    ln -sf "/proc/$pid/ns/net" "/var/run/netns/$pid"
-    ip link set "$tmp" netns "$pid"
-    ip netns exec "$pid" ip link set dev "$tmp" name "$want_if"
-    ip netns exec "$pid" ip link set dev "$want_if" up
+    helper_bind_netns "$pid"
+    helper ip link set "$tmp" netns "$pid"
+    helper ip netns exec "$pid" ip link set dev "$tmp" name "$want_if"
+    helper ip netns exec "$pid" ip link set dev "$want_if" up
 }
 
 # 3a. Wire each host to its switch: host-side NIC named <AS>-<SW>, switch-side OVS
@@ -77,7 +88,7 @@ wire_host_to_switch() {
     local host_ctn="$1" host_if="$2" sw_ctn="$3" sw_port="$4"
     i=$((i + 1))
     local ta="vh${i}a" tb="vh${i}b"
-    ip link add "$ta" type veth peer name "$tb"
+    helper ip link add "$ta" type veth peer name "$tb"
     plug "$host_ctn" "$host_if" "$ta"
     plug "$sw_ctn"   "$sw_port" "$tb"
     docker exec "$sw_ctn" ovs-vsctl add-port br0 "$sw_port" >/dev/null
@@ -93,7 +104,7 @@ done
 wire_switch_trunk() {
     i=$((i + 1))
     local ta="vt${i}a" tb="vt${i}b"
-    ip link add "$ta" type veth peer name "$tb"
+    helper ip link add "$ta" type veth peer name "$tb"
     plug "$SW1_CTN" "$S1_TRUNK_PORT" "$ta"
     plug "$SW2_CTN" "$S2_TRUNK_PORT" "$tb"
     docker exec "$SW1_CTN" ovs-vsctl add-port br0 "$S1_TRUNK_PORT" >/dev/null
