@@ -3,8 +3,8 @@
 # already ships tcpdump, nmap/nping, ping, dig, iperf3):
 #   * router  forwards between the two subnets and is where the learner writes the
 #             BCP38 filter — nftables for the ACL, sysctl for uRPF (rp_filter)
-#   * dns     runs dnsmasq serving one oversized TXT record (the amplifier)
-#   * ntp     runs ntpsec answering mode-6 "readvar" (the post-monlist amplifier)
+#   * dns     runs dnsmasq serving one TXT record (the reflect.lab reflector)
+#   * ntp     runs ntpsec answering mode-6 "readvar" (the post-monlist reflector)
 #   * attacker forges source addresses with nping (-S) and scapy, and crafts the
 #             reflected DNS/NTP queries the reflectors bounce at the victim
 #   * victim  the reflection target; captures what lands on it
@@ -14,7 +14,7 @@ FROM miniinterneteth/d_host:latest
 # cannot set per-interface sysctls or read `ip -s`). scapy (pulls python3) crafts
 # the spoofed reflection queries. nftables + iptables are the two ACL toolchains
 # for the defence. dnsmasq and ntpsec are the two reflector daemons. bind-tools
-# gives a full `dig` for measuring the amplified response.
+# gives a full `dig` for sending the reflected query and reading the response.
 RUN apk add --no-cache \
         iproute2 \
         scapy \

@@ -1,6 +1,6 @@
 title    = "Source spoofing and reflection"
 layer     = "L3"
-summary   = "Forge source addresses to bounce amplified DNS and NTP replies off reflectors onto a victim, then stop it with source-address verification (strict uRPF or an nftables ACL) at the router's customer edge."
+summary   = "Forge source addresses to bounce DNS and NTP replies off reflectors onto a victim, then stop it with source-address verification (strict uRPF or an nftables ACL) at the router's customer edge."
 images    = ["miniinterneteth/d_switch", "d_host_reflect"]
 handout   = "handout.pdf"
 
@@ -32,7 +32,7 @@ ingress_iface   = "cust"          # where source-address verification belongs
   [topology.dns]
   ip   = "102.1.0.53"
   ctn  = "102_L3_LAB_dns"
-  role = "DNS reflector; serves the oversized amplify.lab TXT record plus the real 2026-07-28 TXT sets of google.com, spotify.com, and amazon.com for comparing which name amplifies most"
+  role = "DNS reflector; serves the reflect.lab TXT record the forged query asks for"
 
   [topology.ntp]
   ip   = "102.1.0.123"

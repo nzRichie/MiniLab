@@ -48,14 +48,13 @@ CUST_SRC_RANGE="$CUST_SUBNET"
 
 # ---------------------------------------------------------------------------
 # Reflector specifics.
-# The DNS reflector serves the oversized amplify.lab TXT record (the walkthrough,
-# reflect tool, and selftest all use this name) plus the real TXT sets of
-# google.com, spotify.com, and amazon.com, captured 2026-07-28, for the learner to
-# compare which name amplifies most. A small query for any of them comes back many
-# times larger. The NTP reflector answers a mode-6 control
-# "readvar", which returns its whole variable list — the post-monlist reflection
-# vector. Both facts are echoed in the handout so the learner queries by name.
-AMP_NAME="amplify.lab"
+# The DNS reflector serves one TXT record, reflect.lab (the walkthrough, reflect
+# tool, and selftest all use this name); a forged-source query for it makes the
+# reply land on the victim. The NTP reflector answers a mode-6 control "readvar",
+# which returns its whole variable list — the post-monlist reflection vector, a
+# second unrelated service that reflects the same way. Both names are echoed in the
+# handout so the learner queries by name.
+REFLECT_NAME="reflect.lab"
 
 # The direct-spoofing stage forges a source that belongs on NEITHER lab subnet,
 # so verification has to drop it: there is no interface it could legitimately

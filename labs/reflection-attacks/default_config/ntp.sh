@@ -1,9 +1,11 @@
 #!/bin/bash
 # NTP reflector starter config (honest infrastructure, pre-armed). A time server
-# that also answers mode-6 control queries. The classic NTP amplifier was the
-# mode-7 "monlist" command, removed years ago; this server shows the vector that
-# replaced it: a mode-6 "readvar" returns the server's whole variable list, far
-# larger than the request that asked for it.
+# that also answers mode-6 control queries. It is the lab's second, unrelated
+# reflector: a different protocol on a different port that bounces traffic the same
+# way, so reflection is shown to be a property of connectionless services, not of
+# DNS. NTP's classic reflection vector was the mode-7 "monlist" command, removed
+# years ago; this server shows the vector that replaced it, a mode-6 "readvar",
+# which returns the server's whole variable list to whoever asks.
 #
 # The one deliberately-open choice is the restrict line: the lab subnets are
 # allowed to run control queries (no `noquery`). A hardened server would refuse

