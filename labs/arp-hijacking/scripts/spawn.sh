@@ -33,11 +33,28 @@ docker run -d --name "$SW_CTN" --network=none \
 for h in "${HOSTS[@]}"; do
     ctn="$(ctn_of "$h")"
     log "starting host $ctn"
-    # IP forwarding is set here (not via in-container `sysctl -w`, which fails
-    # because Docker mounts /proc/sys read-only). Enabling it on every host is
-    # harmless on this flat LAN and lets the attacker relay a transparent MITM.
+    # Both sysctls are set here (not via in-container `sysctl -w`, which fails
+    # because Docker mounts /proc/sys read-only). Enabling them on every host is
+    # harmless on this flat LAN and lets the attacker relay a transparent MITM:
+    #   ip_forward=1        relay what the poisoning diverts, so the victim keeps
+    #                       working and sees no loss of connectivity.
+    #   send_redirects=0    a router that forwards a packet back out the interface
+    #                       it arrived on sends the sender an ICMP redirect naming
+    #                       the better next hop. Left on, the attacker's own kernel
+    #                       announces "100.0.0.10 here, use 100.0.0.1 directly" on
+    #                       every relayed packet, printing the attacker's address in
+    #                       the victim's own ping output. A real MITM turns it off
+    #                       first; here it is off from the start so the handout's
+    #                       "the victim sees nothing wrong" is true as written.
+    #                       The kernel ORs the `all` and per-interface values, so
+    #                       both have to be 0; `default` is what 100-S1 inherits,
+    #                       because the helper creates it after this container.
     docker run -d --name "$ctn" --network=none \
-        --cap-add=NET_ADMIN --sysctl net.ipv4.ip_forward=1 --hostname "$h" \
+        --cap-add=NET_ADMIN \
+        --sysctl net.ipv4.ip_forward=1 \
+        --sysctl net.ipv4.conf.all.send_redirects=0 \
+        --sysctl net.ipv4.conf.default.send_redirects=0 \
+        --hostname "$h" \
         "$HOST_IMAGE" >/dev/null
 done
 

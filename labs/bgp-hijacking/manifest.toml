@@ -1,0 +1,89 @@
+title    = "BGP prefix hijacking and RPKI"
+layer     = "L3"
+summary   = "Announce another AS's address block from an attacker AS to pull its traffic across a six-AS topology, watch a same-length hijack take only the attacker's neighbour while a more-specific one takes everyone, then run the deaggregation race down to the /24 floor and find it still loses three ASes, and finish by signing a ROA in the lab's own RPKI registry and dropping the invalid routes with origin validation."
+images    = ["d_router_bgp", "d_host_bgp", "d_rir_krill", "d_validator_routinator"]
+handout   = "handout.pdf"
+
+# Six single-router ASes wired in a fixed topology; each router runs FRR and is
+# configured only over vtysh, and each has one host behind it for the data-plane
+# checks. AS1 holds 1.0.0.0/22 and serves 1.0.0.1; AS6 is the attacker and reaches
+# the rest only through AS5, which is why AS5 is where origin validation is
+# enforced. Addresses are pinned so the handout can name them and a script knows
+# every one before the container exists.
+#
+# No AS applies local-preference or any other policy: every eBGP session carries an
+# empty permit route-map, so a hijack's reach is decided only by prefix length and
+# AS-path distance. Hop counts to AS1 are AS2=1, AS3=2, AS4=2, AS5=3; to AS6 they
+# are AS2=3, AS3=2, AS4=2, AS5=1. Those numbers are what make the ladder work.
+[topology]
+victim_prefix   = "1.0.0.0/22"        # AS1's allocation; the hijack target
+service_ip      = "1.0.0.1"           # what every client curls
+equal_hijack    = "1.0.0.0/22"        # AS6 announces the same block (takes AS5 only)
+sub23_hijack    = "1.0.0.0/23"        # AS6 goes more specific (takes everyone)
+sub24_hijack    = "1.0.0.0/24, 1.0.1.0/24"          # AS6 at the /24 floor
+victim_split23  = "1.0.0.0/23, 1.0.2.0/23"          # AS1 answers in kind
+victim_split24  = "1.0.0.0/24 .. 1.0.3.0/24"        # AS1 at the floor; still loses AS3-AS5
+defender_as     = 5                   # the attacker's only upstream; enforces ROV
+validating_ases = "3, 5"              # routers wired to the validator over RTR
+links           = "1-2, 2-3, 2-4, 3-5, 4-5, 5-6"
+
+  [topology.as1]
+  role       = "victim: holds 1.0.0.0/22, serves 1.0.0.1"
+  router_ctn = "1_L3_BGP_router"
+  host       = "victim (1.0.0.1)"
+
+  [topology.as2]
+  role       = "transit: one hop from the victim, three from the attacker"
+  router_ctn = "2_L3_BGP_router"
+  host       = "client2 (2.0.0.100)"
+
+  [topology.as3]
+  role       = "transit: equidistant from both, so every tie is decided by arrival order; validates but does not enforce"
+  router_ctn = "3_L3_BGP_router"
+  host       = "client3 (3.0.0.100)"
+
+  [topology.as4]
+  role       = "transit: equidistant, symmetric to AS3"
+  router_ctn = "4_L3_BGP_router"
+  host       = "client4 (4.0.0.100)"
+
+  [topology.as5]
+  role       = "transit and defender: the attacker's only upstream, one hop from it; enforces ROV"
+  router_ctn = "5_L3_BGP_router"
+  host       = "client5 (5.0.0.100)"
+
+  [topology.as6]
+  role       = "attacker: announces the hijack, impostor served on 1.0.0.1"
+  router_ctn = "6_L3_BGP_router"
+  host       = "attacker (6.0.0.100, impostor 1.0.0.1)"
+
+# The lab runs its own RPKI, with no connection to the real one. Krill is in
+# testbed mode, so it embeds its own trust anchor and issues each AS a certificate
+# for the block that AS holds; Routinator validates the repository and serves the
+# result to routers over RTR. AS6 ships with a ROA for its own prefix so all three
+# validation states are visible from the start; AS1 ships with none, which is the
+# gap the learner closes.
+[rpki]
+rir_ctn        = "0_L3_BGP_rir"           # Krill: trust anchor, CA and portal
+validator_ctn  = "0_L3_BGP_validator"     # Routinator: relying party, RTR on 3323
+rir_fqdn       = "rir.minilabs"           # Krill 0.16 rejects bare IPs in its URIs
+portal         = "https://127.0.0.1:3000" # bound to loopback only
+portal_token   = "minilabs-rpki-token"
+preloaded_roa  = "6.0.0.0/24 => 6"        # AS6's own block, signed at spawn
+target_roa     = "1.0.0.0/22-24 => 1"     # what the learner ends up registering
+rtr_links      = "validator-AS3 172.28.3.0/30, validator-AS5 172.28.5.0/30"
+
+# Lifecycle actions map one-to-one to wrapper scripts, matching miniManager's
+# item-to-script contract (arguments pass positionally). Paths are relative to this
+# lab directory. The handout has the learner type every announcement, withdrawal
+# and route-map into vtysh by hand. scripts/hijack.sh, scripts/deaggregate.sh and
+# solution/rov.sh drive the same steps non-interactively for scripts/selftest.sh
+# and scripts/reset.sh; they are not menu actions, and the handout does not name
+# them, so nothing invites a learner to run the attack from a script.
+[actions]
+spawn        = "scripts/spawn.sh"
+status       = "scripts/status.sh"
+shell_in     = "scripts/shell.sh"
+reset        = "scripts/reset.sh"
+teardown     = "scripts/teardown.sh"
+open_handout = "scripts/handout.sh"

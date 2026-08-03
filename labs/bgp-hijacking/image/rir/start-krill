@@ -1,0 +1,94 @@
+#!/bin/bash
+# Generate Krill's TLS material, write its config, and hand over to the daemon.
+# Everything is derived from the environment spawn.sh passes in, which reads
+# scripts/lib.sh, so the addresses here cannot drift from the rest of the lab.
+set -e
+
+DATA=/var/krill/data
+SSL="$DATA/ssl"
+FQDN="${RIR_FQDN:-rir.minilabs}"
+PORT="${RIR_PORT:-3000}"
+TOKEN="${KRILL_TOKEN:?KRILL_TOKEN must be set}"
+
+mkdir -p "$SSL" /run/krill
+
+# --- TLS ---------------------------------------------------------------------
+# Routinator has to verify Krill's HTTPS to fetch the trust anchor and the RRDP
+# repository, and it uses `rrdp-root-certs` for that: the certificate named there
+# is treated as a ROOT. A self-signed server certificate is not a root, so the
+# chain has to be a real two levels -- root CA signs a server certificate that
+# carries the RIR's hostname in a subjectAltName. spawn.sh copies root.crt out of
+# this container and into the validator.
+if [ ! -s "$SSL/cert.pem" ]; then
+    echo "[rir] generating the lab RPKI root CA and the ${FQDN} server certificate"
+    openssl req -x509 -newkey rsa:2048 -sha256 -nodes -days 3650 \
+        -keyout "$SSL/root.key" -out "$SSL/root.crt" \
+        -subj "/CN=MiniLabs Lab RPKI Root CA" \
+        -addext "basicConstraints=critical,CA:TRUE" \
+        -addext "keyUsage=critical,keyCertSign,cRLSign" 2>/dev/null
+
+    openssl req -newkey rsa:2048 -sha256 -nodes \
+        -keyout "$SSL/key.pem" -out "$SSL/server.csr" \
+        -subj "/CN=${FQDN}" 2>/dev/null
+
+    cat > "$SSL/server.ext" <<EXT
+basicConstraints=CA:FALSE
+keyUsage=critical,digitalSignature,keyEncipherment
+extendedKeyUsage=serverAuth
+subjectAltName=DNS:${FQDN}
+EXT
+
+    openssl x509 -req -in "$SSL/server.csr" \
+        -CA "$SSL/root.crt" -CAkey "$SSL/root.key" -CAcreateserial \
+        -out "$SSL/server.crt" -days 3650 -sha256 -extfile "$SSL/server.ext" 2>/dev/null
+
+    # Krill serves cert.pem as-is, so it holds the server certificate followed by
+    # the root; the validator is given the root alone.
+    cat "$SSL/server.crt" "$SSL/root.crt" > "$SSL/cert.pem"
+    chmod 600 "$SSL/key.pem"
+fi
+
+# --- config ------------------------------------------------------------------
+# service_uri, rrdp_base_uri and ta_uri must all use a HOSTNAME. Krill 0.16
+# rejects a bare IP address when a child CA requests a certificate ("MUST use
+# hostnames in URIs for certificate requests"), and the failure only shows up
+# later, as a CA that never receives its resources.
+#
+# `https_mode = "existing"` tells Krill to serve the certificate above instead of
+# generating one. Its other modes are not usable here: the default regenerates the
+# SAN-less certificate, and "disable" still demands an https:// service_uri because
+# it assumes a TLS-terminating proxy in front.
+cat > "$DATA/krill.conf" <<CONF
+ip           = "0.0.0.0"
+port         = ${PORT}
+data_dir     = "${DATA}/"
+admin_token  = "${TOKEN}"
+service_uri  = "https://${FQDN}:${PORT}/"
+https_mode   = "existing"
+tls_keys_dir = "${SSL}/"
+log_level    = "warn"
+log_type     = "stderr"
+
+# Krill's ROA analysis compares what you register against a real BGP feed: left
+# enabled it downloads RIPE's RIS whois dump and judges every ROA against the
+# internet's actual routing table. That judgement is wrong here, because the lab's
+# address space is real APNIC space: RIS shows 1.0.0.0/24 originated by AS13335,
+# so the ROA the learner is told to create (1.0.0.0/22-24 => AS1) authorises
+# nothing RIS has seen and invalidates Cloudflare's announcement. The portal then
+# labels a correct ROA "disallows announcements only ... you may want to use AS0
+# instead". Off, the portal reports what the ROA says and nothing else, and the
+# container stops reaching the internet once its image is built.
+bgp_riswhois_enabled = false
+
+# Testbed mode: Krill embeds a trust anchor and hands out resource certificates to
+# any child that enrols, so this container is the entire PKI. rsync_jail is
+# advertised but no rsync daemon runs; the validator is configured for RRDP only.
+[testbed]
+rsync_jail    = "rsync://${FQDN}/repo/"
+rrdp_base_uri = "https://${FQDN}:${PORT}/rrdp/"
+ta_aia        = "rsync://${FQDN}/ta/ta.cer"
+ta_uri        = "https://${FQDN}:${PORT}/ta/ta.cer"
+CONF
+
+echo "[rir] Krill starting as ${FQDN}:${PORT}"
+exec krill -c "$DATA/krill.conf"

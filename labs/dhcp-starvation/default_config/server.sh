@@ -40,4 +40,4 @@ dhcpd -4 -q -cf /etc/dhcp/dhcpd.conf -lf /var/lib/dhcp/dhcpd.leases \
     cat /var/log/dhcpd.log >&2
     exit 1
 }
-echo "legit dhcpd serving 101.0.0.100-130, gateway 101.0.0.1"
+echo "legit dhcpd serving 101.0.0.100-120, gateway 101.0.0.1"

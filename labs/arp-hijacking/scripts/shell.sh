@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Shell into a lab node.  Usage: shell.sh [attacker|victim|gateway]  (default attacker)
+# Shell into a lab node.  Usage: shell.sh [attacker|victim|gateway|S1]  (default attacker)
+# S1 is the Open vSwitch switch, where Part 2's ovs-ofctl work is done.
 # The current miniManager engine streams non-interactively and cannot host a live
 # shell, so when there is no TTY we print the command for the learner to run in
 # their own terminal (proposal: interactive Session is a later enhancement).

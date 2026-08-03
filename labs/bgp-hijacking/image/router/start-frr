@@ -1,0 +1,9 @@
+#!/bin/sh
+# Launch the FRR routing suite and keep the container alive as PID 1.
+#
+# frrinit starts zebra and staticd (mandatory) plus every daemon set to =yes in
+# /etc/frr/daemons -- here, bgpd. spawn.sh then waits for vtysh to answer and
+# pushes each router's config with `vtysh -f`; the learner later injects the
+# hijack, and applies the defence, live over vtysh. Nothing else runs in here.
+/usr/lib/frr/frrinit.sh start || true
+exec sleep infinity

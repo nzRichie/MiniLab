@@ -1,0 +1,72 @@
+#!/bin/sh
+# Wait for the RIR's root certificate and trust anchor locator, write Routinator's
+# config, and hand over to the daemon. Addresses come from the environment
+# spawn.sh passes in, which reads scripts/lib.sh.
+set -e
+
+HOME_DIR=/home/routinator
+TALS="$HOME_DIR/tals"
+ROOT_CERT="$HOME_DIR/root.crt"
+FQDN="${RIR_FQDN:-rir.minilabs}"
+PORT="${RIR_PORT:-3000}"
+RTR_PORT="${RTR_PORT:-3323}"
+
+mkdir -p "$TALS" "$HOME_DIR/.rpki-cache"
+
+# The RIR generates its own root CA at first boot, so the certificate cannot be
+# baked into this image; spawn.sh copies it in once Krill is up. Without it
+# Routinator cannot verify Krill's TLS, and the symptom is unhelpful: it reports
+# "No valid trust anchor" and logs no fetch attempt at any verbosity.
+echo "[validator] waiting for the RIR root certificate"
+i=0
+while [ ! -s "$ROOT_CERT" ]; do
+    i=$((i + 1))
+    [ "$i" -gt 180 ] && { echo "[validator] root certificate never arrived" >&2; exit 1; }
+    sleep 1
+done
+
+# The trust anchor locator names the testbed trust anchor and pins its public key.
+# Fetched over TLS without verification precisely because this is the bootstrap
+# step that establishes trust; what makes it safe is that the TAL pins the key, and
+# every object Routinator later accepts must chain back to it.
+echo "[validator] fetching the trust anchor locator from ${FQDN}"
+i=0
+until wget -q --no-check-certificate -O "$TALS/minilabs.tal" \
+        "https://${FQDN}:${PORT}/ta/ta.tal" && [ -s "$TALS/minilabs.tal" ]; do
+    i=$((i + 1))
+    [ "$i" -gt 180 ] && { echo "[validator] could not fetch the TAL from ${FQDN}" >&2; exit 1; }
+    sleep 1
+done
+
+# no-rir-tals: never load the five real RIR trust anchors. This validator trusts
+#   the lab's testbed trust anchor and nothing else, so it needs no internet.
+# disable-rsync: Krill advertises an rsync jail but runs no rsync daemon; RRDP over
+#   HTTPS is the only transport here.
+# rrdp-root-certs: the RIR's root CA, treated as a trust root for HTTPS.
+# allow-dubious-hosts: "rir.minilabs" is not a public name and resolves from an
+#   /etc/hosts entry, which Routinator would otherwise refuse.
+# refresh: how often the repository is re-validated. 20s keeps the wait between
+#   creating a ROA and seeing it on a router down to about half a minute.
+cat > "$HOME_DIR/routinator.conf" <<CONF
+repository-dir      = "${HOME_DIR}/.rpki-cache/repository"
+no-rir-tals         = true
+extra-tals-dir      = "${TALS}"
+allow-dubious-hosts = true
+disable-rsync       = true
+rrdp-root-certs     = ["${ROOT_CERT}"]
+refresh             = 20
+retry               = 10
+expire              = 7200
+history-size        = 10
+rtr-listen          = ["0.0.0.0:${RTR_PORT}"]
+http-listen         = ["0.0.0.0:9556"]
+log-level           = "warn"
+log                 = "stderr"
+stale               = "reject"
+unsafe-vrps         = "warn"
+unknown-objects     = "warn"
+validation-threads  = 1
+CONF
+
+echo "[validator] Routinator starting, serving RTR on ${RTR_PORT}"
+exec routinator -c "$HOME_DIR/routinator.conf" server
