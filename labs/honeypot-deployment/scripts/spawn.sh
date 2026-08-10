@@ -58,16 +58,29 @@ IDLE_CMD=(sleep infinity)
 # ip_forward is set at creation rather than by default_config/router.sh: Docker
 # mounts /proc/sys read-only in an unprivileged container, and making the router
 # privileged just to write one sysctl is more privilege than this lab needs.
+#
+# ip_unprivileged_port_start goes back to 1024 on every host for the same
+# reason, and it is load-bearing rather than tidiness. The boundary is a
+# per-network-namespace sysctl, and Docker sets it to 0 in any container it
+# gives its own netns, so an unprivileged process in a default container binds
+# port 22 quite happily. Question 4 asks the learner why the decoy cannot, and
+# the lab has to be a machine where that reasoning holds: without this, the
+# honeypot's own cowrie account binds 22 and the answer key is false. Measured
+# in d_host_honey with these flags, uid 1000 binding 0.0.0.0:22 gets EPERM with
+# the sysctl and succeeds without it.
+PORTS_SYSCTL=(--sysctl net.ipv4.ip_unprivileged_port_start=1024)
+
 log "starting router $ROUTER_CTN (forwarding, four segments)"
 docker run -d --name "$ROUTER_CTN" --network=none \
-    --cap-add=NET_ADMIN --sysctl net.ipv4.ip_forward=1 --hostname router \
+    --cap-add=NET_ADMIN --sysctl net.ipv4.ip_forward=1 "${PORTS_SYSCTL[@]}" \
+    --hostname router \
     "$HOST_IMAGE" "${IDLE_CMD[@]}" >/dev/null
 
 for h in prod honeypot admin attacker; do
     ctn="$( ctn_of "$h" )"
     log "starting $ctn"
     docker run -d --name "$ctn" --network=none \
-        --cap-add=NET_ADMIN --hostname "$h" \
+        --cap-add=NET_ADMIN "${PORTS_SYSCTL[@]}" --hostname "$h" \
         "$HOST_IMAGE" "${IDLE_CMD[@]}" >/dev/null
 done
 

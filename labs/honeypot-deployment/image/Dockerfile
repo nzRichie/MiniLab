@@ -41,6 +41,12 @@ RUN python3 -m venv /opt/cowrie-venv \
 # honeypot listens on 2222 rather than 22: an unprivileged process cannot bind a
 # port below 1024, which is why the redirect the learner writes in Part 2 has a
 # port in it as well as an address.
+#
+# That last part is only true because scripts/spawn.sh sets
+# net.ipv4.ip_unprivileged_port_start back to 1024 on every container. The
+# boundary is a per-network-namespace sysctl and Docker sets it to 0, so in a
+# default container this account binds 22 quite happily. Do not drop the sysctl
+# thinking it is decoration: question 4 is graded on the reasoning above.
 RUN adduser -D -h /opt/cowrie -s /bin/sh cowrie
 
 # The state directory Cowrie runs out of. `cowrie start` refuses to launch unless

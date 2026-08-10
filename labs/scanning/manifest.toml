@@ -1,6 +1,6 @@
 title    = "Internet scanning and service discovery"
 layer     = "L4"
-summary   = "Survey a /24 you are outside of: sweep it for live hosts with zmap, masscan and nmap and find the host a ping sweep misses, identify the software behind every open port, then turn an anonymous FTP share into an account name and guess that account's telnet password with hydra."
+summary   = "Survey a /24 you are outside of: sweep it with zmap, masscan and nmap to find which addresses reply and which probe each one replies to, including the host a ping sweep misses, identify the software behind every open port, then turn an anonymous FTP share into an account name and guess that account's telnet password with hydra."
 images    = ["miniinterneteth/d_switch", "d_host_scan"]
 handout   = "handout.pdf"
 
@@ -33,7 +33,7 @@ live_addresses  = 5                  # four hosts plus the router's own interfac
   [topology.router]
   ip   = "104.0.0.1 (ext), 104.1.0.1 (int)"
   ctn  = "104_L4_LAB_router"
-  role = "forwards between the two subnets and filters nothing; its int address answers a sweep, so a live address is not the same thing as a host with services"
+  role = "forwards between the two subnets and filters nothing; its int address replies to a sweep, so an address that replies is not the same thing as a host with services"
 
   [topology.host1]
   ip   = "104.1.0.23"
@@ -43,7 +43,7 @@ live_addresses  = 5                  # four hosts plus the router's own interfac
   [topology.host2]
   ip   = "104.1.0.42"
   ctn  = "104_L4_LAB_host2"
-  role = "answers ping, listens on nothing; all 1000 scanned ports come back closed, which is what separates a live host from a target"
+  role = "replies to ping, listens on nothing; all 1000 scanned ports come back closed, which is what separates a host that replies from a target"
 
   [topology.host3]
   ip   = "104.1.0.87"

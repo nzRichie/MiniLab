@@ -229,19 +229,36 @@ leaking()     { [ "${1:-0}" -ge "$LEAK_MIN" ]; }
 not_leaking() { [ "${1:-0}" -lt "$LEAK_MIN" ]; }
 
 # Count victim-to-gateway frames arriving on the attacker's access port while the
-# victim sends LEAK_PROBES echo requests.
-attacker_sees() {   # -> frame count
-    local gmac
+# victim sends LEAK_PROBES echo requests, and the gateway's replies to the victim
+# in the SAME window. Both filters are on the destination address, so the pair is
+# exactly what Question 8 asks about: the forward direction leaks because the
+# gateway's row has been evicted, and the reverse does not, because the victim's
+# row sits on a port fair eviction never takes from. Measuring both in one ping
+# run is what makes the reverse count comparable with the forward one; measuring
+# them in separate runs would compare two different states of the table.
+attacker_sees_both() {   # -> "<victim-to-gateway> <gateway-to-victim>"
+    local gmac vmac fwd rev
     gmac="$( gateway_mac )"
-    docker exec "$ATTACKER_CTN" sh -c 'rm -f /tmp/leak.pcap' 2>/dev/null
+    vmac="$( victim_mac )"
+    docker exec "$ATTACKER_CTN" sh -c 'rm -f /tmp/leak.pcap /tmp/leak-rev.pcap' 2>/dev/null
     docker exec -d "$ATTACKER_CTN" sh -c \
         "timeout 20 tcpdump -n -i $ATTACKER_IF -w /tmp/leak.pcap 'ether dst $gmac and icmp' >/dev/null 2>&1"
+    docker exec -d "$ATTACKER_CTN" sh -c \
+        "timeout 20 tcpdump -n -i $ATTACKER_IF -w /tmp/leak-rev.pcap 'ether dst $vmac and icmp' >/dev/null 2>&1"
     sleep 1
     docker exec "$VICTIM_CTN" ping -c"$LEAK_PROBES" -i 0.5 -W1 "$GATEWAY_IP" >/dev/null 2>&1 || true
     sleep 1
     docker exec "$ATTACKER_CTN" pkill -f tcpdump >/dev/null 2>&1 || true
     sleep 0.4
-    docker exec "$ATTACKER_CTN" sh -c 'tcpdump -nr /tmp/leak.pcap 2>/dev/null | wc -l' | tr -d ' \r\n'
+    fwd="$( docker exec "$ATTACKER_CTN" sh -c 'tcpdump -nr /tmp/leak.pcap 2>/dev/null | wc -l' | tr -d ' \r\n' )"
+    rev="$( docker exec "$ATTACKER_CTN" sh -c 'tcpdump -nr /tmp/leak-rev.pcap 2>/dev/null | wc -l' | tr -d ' \r\n' )"
+    echo "${fwd:-0} ${rev:-0}"
+}
+
+attacker_sees() {   # -> frame count, forward direction only
+    local fwd rev
+    read -r fwd rev <<<"$( attacker_sees_both )"
+    echo "${fwd:-0}"
 }
 
 # ---------------------------------------------------------------------------

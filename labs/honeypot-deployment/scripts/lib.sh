@@ -46,7 +46,9 @@ ADMIN_IP="106.3.0.30"         # the management station
 # Cowrie refuses to run as root, and an unprivileged process cannot bind a port
 # below 1024, so the honeypot listens on 2222 while the service it impersonates
 # listens on 22. That gap is why the redirect the learner writes in Part 2
-# rewrites a port as well as an address.
+# rewrites a port as well as an address. The second half of that holds only
+# because spawn.sh sets net.ipv4.ip_unprivileged_port_start to 1024; Docker's
+# own default is 0, under which the cowrie account binds 22 without complaint.
 SSH_PORT=22
 HONEY_SSH_PORT=2222
 WEB_PORT=80
