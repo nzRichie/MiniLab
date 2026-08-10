@@ -9,11 +9,35 @@ document.
 
 ## Requirements
 
-Docker, and an account in the `docker` group. That is the whole list.
+Docker, and an account that can reach a Docker daemon. That is the whole list.
 
 You do not need root or `sudo` to run a lab. Creating the virtual links between
 lab containers needs privileges your account will not have, so each lab does that
 work inside a short-lived privileged container that it removes when the lab is up.
+
+Every lab runs on either a rootless or a rootful daemon. On a shared or
+university machine, pick rootless. Adding a student to the `docker` group grants
+them root on that machine: `docker run -v /:/host` then reads and writes every
+file on it, including other accounts' work. A rootless daemon runs as the student
+and maps container root to their own user id, so a lab cannot reach outside their
+own files.
+
+```bash
+# Rootless (Ubuntu). docker-ce-rootless-extras comes from Docker's own apt
+# repository, and carries the AppArmor profile Ubuntu 24.04 and later need.
+sudo apt install -y uidmap dbus-user-session docker-ce-rootless-extras
+dockerd-rootless-setuptool.sh install
+
+# Rootless (Arch)
+sudo pacman -S docker docker-rootless-extras
+dockerd-rootless-setuptool.sh install
+```
+
+Your account needs at least 65,536 subordinate uids in `/etc/subuid`. Locally
+created accounts get them automatically; accounts from LDAP or Active Directory
+do not, and an administrator has to add them.
+
+Rootful is the older setup and still works:
 
 ```bash
 # Ubuntu
@@ -27,7 +51,8 @@ sudo usermod -aG docker "$USER"   # log out and back in
 ```
 
 Check it worked with `docker info`. If that prints a daemon summary rather than a
-permission error, you are ready.
+permission error, you are ready. A rootless daemon lists `rootless` under
+Security Options.
 
 ## Running a lab
 

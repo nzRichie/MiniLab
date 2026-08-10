@@ -1,0 +1,46 @@
+title     = "MAC flooding and port security"
+layer     = "L2"
+summary   = "Flood a switch's address table from an access port until it evicts the gateway and floods the victim's traffic to every port, then stop it with a static forwarding entry and per-port source-address filtering."
+images    = ["miniinterneteth/d_switch", "d_host_macflood"]
+handout   = "handout.pdf"
+
+# One flat broadcast domain across two switches. S1 is the access switch under
+# attack, with a deliberately small address table; S2 carries everything the
+# uplink's single port has to account for. Addresses are fixed so the handout can
+# reference them and a lab script knows every IP before the container exists.
+[topology]
+subnet          = "106.0.0.0/24"
+access_switch   = "106_L2_LAB_S1"
+dist_switch     = "106_L2_LAB_S2"
+mac_table_size  = 16          # S1 only; S2 keeps the stock 2048
+
+  [topology.attacker]
+  ip  = "106.0.0.10"
+  ctn = "106_L2_LAB_attacker"
+  on  = "S1 (access port 106-attacker)"
+
+  [topology.victim]
+  ip  = "106.0.0.20"
+  ctn = "106_L2_LAB_victim"
+  on  = "S1 (access port 106-victim)"
+
+  [topology.gateway]
+  ip  = "106.0.0.1"
+  ctn = "106_L2_LAB_gateway"
+  on  = "S2 (access port 106-gateway), so S1 reaches it through the uplink"
+
+  [topology.staff]
+  ip  = "106.0.0.31 - 106.0.0.40"
+  ctn = "106_L2_LAB_staff"
+  on  = "S2 (ten access ports 106-staff01 to 106-staff10)"
+
+# Lifecycle actions map one-to-one to wrapper scripts, matching miniManager's
+# item-to-script contract (arguments are passed positionally). Paths are relative
+# to this lab directory.
+[actions]
+spawn        = "scripts/spawn.sh"
+status       = "scripts/status.sh"
+shell_in     = "scripts/shell.sh"
+reset        = "scripts/reset.sh"
+teardown     = "scripts/teardown.sh"
+open_handout = "scripts/handout.sh"

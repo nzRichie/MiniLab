@@ -222,22 +222,39 @@ ensure_images() {
 }
 
 # ---------------------------------------------------------------------------
-# Privileged host networking, performed from a helper container (identical
-# rationale to the reflection lab: wiring a veth pair into a container needs
-# CAP_NET_ADMIN + setns + write access to /run/netns, none of which a learner's
-# account has). A throwaway --privileged --network=host --pid=host container holds
-# those privileges instead, so docker-group membership is the only privilege the
-# learner needs. The kernel objects are identical to the host-root path.
+# Privileged host networking, performed from a helper container.
+#
+# Wiring a lab needs privileges a learner's account will not have: CAP_NET_ADMIN
+# to create a veth pair, and CAP_SYS_ADMIN to enter a container's network
+# namespace and rename the interface inside it. Rather than require root on the
+# host, a throwaway --privileged container holds them.
+#
+# The helper keeps a network namespace of its own (--network=none). Both ends of
+# every veth pair are moved out into lab containers, so the namespace the pair is
+# created in never matters. Asking for the host's namespace (--network=host)
+# only breaks the helper under a rootless daemon, where that namespace belongs to
+# a user namespace the helper holds no privilege in and every `ip link add`
+# returns EPERM. --pid=host stays: it is what makes each lab container's
+# /proc/<pid>/ns/net reachable for the moves.
+#
+# Renames run through `nsenter --net`, not `ip netns exec`. iproute2 remounts
+# /sys on every namespace switch and a user namespace forbids that, while the
+# rename itself is pure netlink and needs no sysfs at all.
+#
+# The kernel objects are identical to the host-root path: same veth pair, same
+# namespaces, same interface names, same OVS ports. Only the identity of the
+# process issuing the netlink calls changes, which nothing in the data plane can
+# observe. Docker access is the only privilege a learner needs, and on a rootless
+# daemon that access no longer carries root on the host.
 HELPER_CTN="0_${LAYER}_${DC}_netadmin"
 
 helper_start() {
     docker rm -f "$HELPER_CTN" >/dev/null 2>&1 || true
     docker run -d --rm --name "$HELPER_CTN" \
-        --privileged --network=host --pid=host \
+        --privileged --network=none --pid=host \
         "$HOST_IMAGE" sleep 600 >/dev/null
     for _ in $(seq 1 40); do
         if docker exec "$HELPER_CTN" true >/dev/null 2>&1; then
-            docker exec "$HELPER_CTN" mkdir -p /var/run/netns
             return 0
         fi
         sleep 0.25
@@ -246,15 +263,14 @@ helper_start() {
     return 1
 }
 helper()            { docker exec "$HELPER_CTN" "$@"; }
-helper_bind_netns() { docker exec "$HELPER_CTN" ln -sf "/proc/$1/ns/net" "/var/run/netns/$1"; }
 helper_stop()       { docker rm -f "$HELPER_CTN" >/dev/null 2>&1 || true; }
 
 # Address an interface from the helper rather than from inside the target
 # container. The RPKI containers are upstream images with no iproute2 of their own,
 # so their veth end is configured through the helper's netns handle instead.
 helper_addr() {   # <pid> <ifname> <cidr>
-    helper ip netns exec "$1" ip address replace "$3" dev "$2"
-    helper ip netns exec "$1" ip link set dev "$2" up
+    helper nsenter --net="/proc/$1/ns/net" ip address replace "$3" dev "$2"
+    helper nsenter --net="/proc/$1/ns/net" ip link set dev "$2" up
 }
 
 # ---------------------------------------------------------------------------

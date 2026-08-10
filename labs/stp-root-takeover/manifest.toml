@@ -1,0 +1,67 @@
+title    = "STP root bridge takeover"
+layer     = "L2"
+summary   = "Forge a Configuration BPDU claiming bridge priority 0, take the spanning tree's root away from the switch that should hold it, and watch the blocked link move and the network go dark while it rebuilds; then plug a second cable in, bridge the two, and read the victim's traffic as the tree routes it through you. Stop both with BPDU guard on the access ports."
+images    = ["miniinterneteth/d_switch", "d_host_stp"]
+handout   = "handout.pdf"
+
+# Three Open vSwitch switches in a ring, which is the smallest topology where a
+# spanning tree has anything to decide: it elects a root and blocks exactly one
+# port to break the loop. S1 holds the lowest configured priority, so the intended
+# tree is rooted there and the blocked port lands on the S2-S3 link.
+#
+# Three switches, not two, and this is load-bearing. On a two-switch topology with
+# the attacker hanging off one of them, winning the root election changes no
+# forwarding path at all: measured at zero packets lost, because the relative
+# order of the two switches on the way to the root is identical before and after.
+# A ring is what makes a takeover move which port blocks, and therefore what makes
+# it cost the victim anything.
+#
+# Addresses and priorities are fixed so the handout can name them and a script
+# knows every one before a container exists.
+[topology]
+subnet        = "105.0.0.0/24"
+ring          = "S1 <-> S2 <-> S3 <-> S1"
+blocked_port  = "S3's port toward S2 (at baseline; the takeover moves it to S3's port toward S1)"
+forged_bridge = "priority 0, MAC 00:11:22:33:44:55"   # no legitimate bridge here uses priority 0
+timers        = "802.1D defaults: hello 2s, max-age 20s, forward delay 15s"
+
+  [topology.s1]
+  priority = 4096
+  ctn      = "105_L2_LAB_S1"
+  role     = "the intended root; lowest configured priority of the three"
+
+  [topology.s2]
+  priority = 8192
+  ctn      = "105_L2_LAB_S2"
+  role     = "holds the victim and the attacker's first link; its access port is the lax one"
+
+  [topology.s3]
+  priority = 12288
+  ctn      = "105_L2_LAB_S3"
+  role     = "holds the gateway and the attacker's second link; Part 2 makes this the other lax port"
+
+  [topology.attacker]
+  ip   = "105.0.0.10"
+  ctn  = "105_L2_LAB_attacker"
+  role = "forges the superior BPDU; dual-homed, but its second link starts down"
+
+  [topology.victim]
+  ip   = "105.0.0.20"
+  ctn  = "105_L2_LAB_victim"
+  role = "an ordinary host behind S2; its ping to the gateway measures the outage and the interception"
+
+  [topology.gateway]
+  ip   = "105.0.0.1"
+  ctn  = "105_L2_LAB_gateway"
+  role = "the far end of the victim's path, behind S3"
+
+# Lifecycle actions map one-to-one to wrapper scripts, matching miniManager's
+# item-to-script contract (arguments are passed positionally). Paths are relative
+# to this lab directory.
+[actions]
+spawn        = "scripts/spawn.sh"
+status       = "scripts/status.sh"
+shell_in     = "scripts/shell.sh"
+reset        = "scripts/reset.sh"
+teardown     = "scripts/teardown.sh"
+open_handout = "scripts/handout.sh"

@@ -9,10 +9,10 @@ log() { echo "[spawn] $*"; }
 
 # Open vSwitch is NOT required on the host: every ovs-vsctl call in this lab runs
 # inside the switch container, whose image ships OVS. Docker reachability is the
-# real prerequisite, and it covers group membership as well as a stopped daemon.
+# real prerequisite, and it covers an unreachable daemon as well as a stopped one.
 command -v docker >/dev/null 2>&1 || { echo "docker not found on host" >&2; exit 1; }
 docker info >/dev/null 2>&1 || {
-    echo "cannot reach the Docker daemon; is it running and are you in the 'docker' group?" >&2
+    echo "cannot reach the Docker daemon; is it running and can this account reach it? (try: docker info)" >&2
     exit 1
 }
 
@@ -28,7 +28,7 @@ ensure_images
 log "starting switch $SW_CTN"
 docker run -d --name "$SW_CTN" --network=none \
     --cap-add=ALL --cap-drop=SYS_RESOURCE --hostname "$SW" \
-    "$SWITCH_IMAGE" >/dev/null
+    "$SWITCH_IMAGE" sh -c "$SWITCH_CMD" >/dev/null
 
 for h in "${HOSTS[@]}"; do
     ctn="$(ctn_of "$h")"
@@ -87,15 +87,13 @@ wire_host_to_switch() {
     local ta="vh${i}a" tb="vh${i}b" hpid spid
     hpid="$(docker inspect -f '{{.State.Pid}}' "$host_ctn")"
     spid="$(docker inspect -f '{{.State.Pid}}' "$SW_CTN")"
-    helper_bind_netns "$hpid"
-    helper_bind_netns "$spid"
     helper ip link add "$ta" type veth peer name "$tb"
     helper ip link set "$ta" netns "$hpid"
     helper ip link set "$tb" netns "$spid"
-    helper ip netns exec "$hpid" ip link set dev "$ta" name "$host_if"
-    helper ip netns exec "$hpid" ip link set dev "$host_if" up
-    helper ip netns exec "$spid" ip link set dev "$tb" name "$sw_port"
-    helper ip netns exec "$spid" ip link set dev "$sw_port" up
+    helper nsenter --net="/proc/$hpid/ns/net" ip link set dev "$ta" name "$host_if"
+    helper nsenter --net="/proc/$hpid/ns/net" ip link set dev "$host_if" up
+    helper nsenter --net="/proc/$spid/ns/net" ip link set dev "$tb" name "$sw_port"
+    helper nsenter --net="/proc/$spid/ns/net" ip link set dev "$sw_port" up
     docker exec "$SW_CTN" ovs-vsctl add-port br0 "$sw_port" >/dev/null
 }
 

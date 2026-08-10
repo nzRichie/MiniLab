@@ -11,11 +11,11 @@ source "$( dirname "${BASH_SOURCE[0]}" )/lib.sh"
 
 log() { echo "[spawn] $*"; }
 
-# Docker reachability is the only host prerequisite (covers group membership and a
+# Docker reachability is the only host prerequisite (covers an unreachable daemon and a
 # stopped daemon). No ovs/frr host check: both live inside the images.
 command -v docker >/dev/null 2>&1 || { echo "docker not found on host" >&2; exit 1; }
 docker info >/dev/null 2>&1 || {
-    echo "cannot reach the Docker daemon; is it running and are you in the 'docker' group?" >&2
+    echo "cannot reach the Docker daemon; is it running and can this account reach it? (try: docker info)" >&2
     exit 1
 }
 
@@ -85,10 +85,9 @@ i=0
 plug() {
     local ctn="$1" want_if="$2" tmp="$3" pid
     pid="$( docker inspect -f '{{.State.Pid}}' "$ctn" )"
-    helper_bind_netns "$pid"
     helper ip link set "$tmp" netns "$pid"
-    helper ip netns exec "$pid" ip link set dev "$tmp" name "$want_if"
-    helper ip netns exec "$pid" ip link set dev "$want_if" up
+    helper nsenter --net="/proc/$pid/ns/net" ip link set dev "$tmp" name "$want_if"
+    helper nsenter --net="/proc/$pid/ns/net" ip link set dev "$want_if" up
 }
 # One point-to-point veth between two containers' named interfaces.
 wire() {
@@ -123,7 +122,6 @@ for link in "${RPKI_LINKS[@]}"; do
     wire "$VALIDATOR_CTN" "$( rpki_if_validator "$as" )" \
          "$( router_ctn "$as" )" "$( rpki_if_router )"
     vpid="$( docker inspect -f '{{.State.Pid}}' "$VALIDATOR_CTN" )"
-    helper_bind_netns "$vpid"
     helper_addr "$vpid" "$( rpki_if_validator "$as" )" "${vip}/${subnet##*/}"
 done
 

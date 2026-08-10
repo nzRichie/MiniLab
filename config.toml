@@ -18,6 +18,7 @@ title = "ARP hijacking"
   [[items.items]]
   title = "Status"
   script = "labs/arp-hijacking/scripts/status.sh"
+  hold = true
 
   [[items.items]]
   title = "Shell command for a node"
@@ -64,6 +65,7 @@ title = "DHCP starvation and rogue DHCP"
   [[items.items]]
   title = "Status"
   script = "labs/dhcp-starvation/scripts/status.sh"
+  hold = true
 
   [[items.items]]
   title = "Shell command for a node"
@@ -110,6 +112,7 @@ title = "Source spoofing and reflection"
   [[items.items]]
   title = "Status"
   script = "labs/reflection-attacks/scripts/status.sh"
+  hold = true
 
   [[items.items]]
   title = "Shell command for a node"
@@ -160,6 +163,7 @@ title = "VLAN hopping"
   [[items.items]]
   title = "Status"
   script = "labs/vlan-hopping/scripts/status.sh"
+  hold = true
 
   [[items.items]]
   title = "Shell command for a node"
@@ -210,6 +214,7 @@ title = "BGP prefix hijacking and RPKI"
   [[items.items]]
   title = "Status"
   script = "labs/bgp-hijacking/scripts/status.sh"
+  hold = true
 
   [[items.items]]
   title = "Shell command for a node"
@@ -285,3 +290,221 @@ title = "BGP prefix hijacking and RPKI"
   [[items.items]]
   title = "Open handout"
   script = "labs/bgp-hijacking/scripts/handout.sh"
+
+[[items]]
+title = "Internet scanning and service discovery"
+
+  [[items.items]]
+  title = "Spawn"
+  script = "labs/scanning/scripts/spawn.sh"
+
+  [[items.items]]
+  title = "Status"
+  script = "labs/scanning/scripts/status.sh"
+  hold = true
+
+  [[items.items]]
+  title = "Shell command for a node"
+  script = "labs/scanning/scripts/shell.sh"
+
+    [[items.items.args]]
+    prompt = "Which node? (every step of this lab runs on attacker)"
+
+      [[items.items.args.options]]
+      value = "attacker"
+      follow_up = []
+
+      [[items.items.args.options]]
+      value = "router"
+      follow_up = []
+
+      [[items.items.args.options]]
+      value = "host1"
+      follow_up = []
+
+      [[items.items.args.options]]
+      value = "host2"
+      follow_up = []
+
+      [[items.items.args.options]]
+      value = "host3"
+      follow_up = []
+
+      [[items.items.args.options]]
+      value = "host4"
+      follow_up = []
+
+  [[items.items]]
+  title = "Reset to baseline"
+  script = "labs/scanning/scripts/reset.sh"
+
+  [[items.items]]
+  title = "Teardown"
+  script = "labs/scanning/scripts/teardown.sh"
+
+  [[items.items]]
+  title = "Open handout"
+  script = "labs/scanning/scripts/handout.sh"
+
+[[items]]
+title = "STP root bridge takeover"
+
+  [[items.items]]
+  title = "Spawn"
+  script = "labs/stp-root-takeover/scripts/spawn.sh"
+
+  [[items.items]]
+  title = "Status"
+  script = "labs/stp-root-takeover/scripts/status.sh"
+
+  [[items.items]]
+  title = "Shell command for a node"
+  script = "labs/stp-root-takeover/scripts/shell.sh"
+
+    [[items.items.args]]
+    name = "node"
+    prompt = "Which node?"
+
+      [[items.items.args.options]]
+      value = "attacker"
+      follow_up = []
+
+      [[items.items.args.options]]
+      value = "victim"
+      follow_up = []
+
+      [[items.items.args.options]]
+      value = "gateway"
+      follow_up = []
+
+      [[items.items.args.options]]
+      value = "S1"
+      follow_up = []
+
+      [[items.items.args.options]]
+      value = "S2"
+      follow_up = []
+
+      [[items.items.args.options]]
+      value = "S3"
+      follow_up = []
+
+  [[items.items]]
+  title = "Reset to baseline"
+  script = "labs/stp-root-takeover/scripts/reset.sh"
+
+  [[items.items]]
+  title = "Teardown"
+  script = "labs/stp-root-takeover/scripts/teardown.sh"
+
+  [[items.items]]
+  title = "Open handout"
+  script = "labs/stp-root-takeover/scripts/handout.sh"
+
+[[items]]
+title = "MAC flooding and port security"
+
+  [[items.items]]
+  title = "Spawn"
+  script = "labs/mac-flooding/scripts/spawn.sh"
+
+  [[items.items]]
+  title = "Status"
+  script = "labs/mac-flooding/scripts/status.sh"
+  hold = true
+
+  [[items.items]]
+  title = "Shell command for a node"
+  script = "labs/mac-flooding/scripts/shell.sh"
+
+    [[items.items.args]]
+    name = "node"
+    prompt = "Which node?"
+
+      [[items.items.args.options]]
+      value = "attacker"
+      follow_up = []
+
+      [[items.items.args.options]]
+      value = "victim"
+      follow_up = []
+
+      [[items.items.args.options]]
+      value = "gateway"
+      follow_up = []
+
+      [[items.items.args.options]]
+      value = "staff"
+      follow_up = []
+
+      [[items.items.args.options]]
+      value = "S1"
+      follow_up = []
+
+      [[items.items.args.options]]
+      value = "S2"
+      follow_up = []
+
+  [[items.items]]
+  title = "Reset to baseline"
+  script = "labs/mac-flooding/scripts/reset.sh"
+
+  [[items.items]]
+  title = "Teardown"
+  script = "labs/mac-flooding/scripts/teardown.sh"
+
+  [[items.items]]
+  title = "Open handout"
+  script = "labs/mac-flooding/scripts/handout.sh"
+
+[[items]]
+title = "Honeypot deployment and containment"
+
+  [[items.items]]
+  title = "Spawn"
+  script = "labs/honeypot-deployment/scripts/spawn.sh"
+
+  [[items.items]]
+  title = "Status"
+  script = "labs/honeypot-deployment/scripts/status.sh"
+  hold = true
+
+  [[items.items]]
+  title = "Shell command for a node"
+  script = "labs/honeypot-deployment/scripts/shell.sh"
+
+    [[items.items.args]]
+    name = "node"
+    prompt = "Which node?"
+
+      [[items.items.args.options]]
+      value = "attacker"
+      follow_up = []
+
+      [[items.items.args.options]]
+      value = "prod"
+      follow_up = []
+
+      [[items.items.args.options]]
+      value = "honeypot"
+      follow_up = []
+
+      [[items.items.args.options]]
+      value = "admin"
+      follow_up = []
+
+      [[items.items.args.options]]
+      value = "router"
+      follow_up = []
+
+  [[items.items]]
+  title = "Reset to baseline"
+  script = "labs/honeypot-deployment/scripts/reset.sh"
+
+  [[items.items]]
+  title = "Teardown"
+  script = "labs/honeypot-deployment/scripts/teardown.sh"
+
+  [[items.items]]
+  title = "Open handout"
+  script = "labs/honeypot-deployment/scripts/handout.sh"

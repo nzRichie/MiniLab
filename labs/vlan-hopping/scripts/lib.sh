@@ -62,7 +62,17 @@ sw_of()      { local v="SW_OF_$1"; echo "${!v}"; }          # host -> its switch
 host_if_of() { echo "${AS}-$(sw_of "$1")"; }                # host -> its NIC name (<AS>-<SW>)
 
 SWITCH_IMAGE="miniinterneteth/d_switch"
+
 HOST_IMAGE="d_host_vlan"
+# Open vSwitch is started explicitly instead of through the image's supervisord
+# entrypoint, so that --no-mlockall can be passed. ovs-ctl locks ovs-vswitchd
+# into memory by default. Under rootless Docker CAP_IPC_LOCK is confined to the
+# user namespace and cannot exceed RLIMIT_MEMLOCK (8 MB on a stock host), so the
+# first thread stack past that limit fails to lock and ovs-vswitchd dies with
+# "pthread_create failed (Resource temporarily unavailable)". Locking buys this
+# lab nothing: a lab switch forwards a handful of packets and never needs its
+# pages pinned. Under rootful Docker the resulting datapath is identical.
+SWITCH_CMD='/usr/share/openvswitch/scripts/ovs-ctl start --no-mlockall --system-id=random && exec sleep infinity'
 
 # ---------------------------------------------------------------------------
 # Container names follow the platform convention <AS>_L2_<DC>_<name>. Both switches
@@ -113,28 +123,54 @@ ensure_images() {
         echo "[spawn] building $HOST_IMAGE from $LAB_DIR/image (first run only)"
         docker build -t "$HOST_IMAGE" "$LAB_DIR/image" \
             || { echo "failed to build $HOST_IMAGE" >&2; return 1; }
+    elif image_older_than_source "$HOST_IMAGE" "$LAB_DIR/image"; then
+        echo "[spawn] rebuilding $HOST_IMAGE: $LAB_DIR/image changed since it was built"
+        docker build -t "$HOST_IMAGE" "$LAB_DIR/image" \
+            || { echo "failed to rebuild $HOST_IMAGE" >&2; return 1; }
     fi
+}
+
+# ---------------------------------------------------------------------------
+# True when anything in <dir> is newer than the image built from it. Without this
+# check an image is rebuilt only when it is missing, so an edit to image/ never
+# reaches a machine that built the image once: the containers keep running the
+# previous version while the handout describes the new one. Returns non-zero (no
+# rebuild) when the timestamps cannot be read, so a non-GNU `date` or `find`
+# degrades to the old behaviour rather than rebuilding on every spawn.
+image_older_than_source() {   # <image> <dir>
+    local img="$1" dir="$2" built newest
+    built="$( docker image inspect -f '{{.Created}}' "$img" 2>/dev/null )" || return 1
+    built="$( date -d "$built" +%s 2>/dev/null )" || return 1
+    newest="$( find "$dir" -type f -printf '%T@\n' 2>/dev/null | sort -n | tail -1 )"
+    [ -n "$newest" ] || return 1
+    [ "${newest%.*}" -gt "$built" ]
 }
 
 # ---------------------------------------------------------------------------
 # Privileged host networking, performed from a helper container.
 #
-# Wiring a lab needs three privileges a learner's account will not have:
-# CAP_NET_ADMIN to create a veth pair in the host's network namespace,
-# CAP_SYS_ADMIN to setns into a container and rename the interface there, and
-# write access to /run/netns. Rather than require root on the host, a throwaway
-# container holds them. --network=host puts it IN the host network namespace, so
-# `ip link add` creates the veth exactly where a host-run command would, and
-# --pid=host makes each lab container's /proc/<pid>/ns/net reachable for the
-# namespace moves.
+# Wiring a lab needs privileges a learner's account will not have: CAP_NET_ADMIN
+# to create a veth pair, and CAP_SYS_ADMIN to enter a container's network
+# namespace and rename the interface inside it. Rather than require root on the
+# host, a throwaway --privileged container holds them.
+#
+# The helper keeps a network namespace of its own (--network=none). Both ends of
+# every veth pair are moved out into lab containers, so the namespace the pair is
+# created in never matters. Asking for the host's namespace (--network=host)
+# only breaks the helper under a rootless daemon, where that namespace belongs to
+# a user namespace the helper holds no privilege in and every `ip link add`
+# returns EPERM. --pid=host stays: it is what makes each lab container's
+# /proc/<pid>/ns/net reachable for the moves.
+#
+# Renames run through `nsenter --net`, not `ip netns exec`. iproute2 remounts
+# /sys on every namespace switch and a user namespace forbids that, while the
+# rename itself is pure netlink and needs no sysfs at all.
 #
 # The kernel objects are identical to the host-root path: same veth pair, same
 # namespaces, same interface names, same OVS ports. Only the identity of the
 # process issuing the netlink calls changes, which nothing in the data plane can
-# observe. Docker group membership becomes the only privilege a learner needs.
-#
-# The netns symlinks are created inside the helper, so the host's /run/netns is
-# never created and teardown has nothing to clean up there.
+# observe. Docker access is the only privilege a learner needs, and on a rootless
+# daemon that access no longer carries root on the host.
 HELPER_CTN="$( ctn_of netadmin )"
 
 # Start the helper and wait until it can run a command. `--rm` plus a bounded
@@ -143,11 +179,10 @@ HELPER_CTN="$( ctn_of netadmin )"
 helper_start() {
     docker rm -f "$HELPER_CTN" >/dev/null 2>&1 || true
     docker run -d --rm --name "$HELPER_CTN" \
-        --privileged --network=host --pid=host \
+        --privileged --network=none --pid=host \
         "$HOST_IMAGE" sleep 600 >/dev/null
     for _ in $(seq 1 40); do
         if docker exec "$HELPER_CTN" true >/dev/null 2>&1; then
-            docker exec "$HELPER_CTN" mkdir -p /var/run/netns
             return 0
         fi
         sleep 0.25
@@ -159,10 +194,5 @@ helper_start() {
 # Run one privileged networking command inside the helper.
 helper() { docker exec "$HELPER_CTN" "$@"; }
 
-# Make a container's network namespace addressable as `ip netns` name <pid>
-# from inside the helper.
-helper_bind_netns() {
-    docker exec "$HELPER_CTN" ln -sf "/proc/$1/ns/net" "/var/run/netns/$1"
-}
 
 helper_stop() { docker rm -f "$HELPER_CTN" >/dev/null 2>&1 || true; }

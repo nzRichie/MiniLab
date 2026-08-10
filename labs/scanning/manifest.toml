@@ -1,0 +1,77 @@
+title    = "Internet scanning and service discovery"
+layer     = "L4"
+summary   = "Survey a /24 you are outside of: sweep it for live hosts with zmap, masscan and nmap and find the host a ping sweep misses, identify the software behind every open port, then turn an anonymous FTP share into an account name and guess that account's telnet password with hydra."
+images    = ["miniinterneteth/d_switch", "d_host_scan"]
+handout   = "handout.pdf"
+
+# Layer 4: one router forwards between the attacker's subnet and the /24 under
+# survey. The attacker is outside the target network and is told only its range,
+# which is what makes the lab reconnaissance rather than a look at its own LAN.
+#
+# The four target addresses are scattered across the /24 on purpose: no
+# consecutive block, nothing on a round number, so reading them off a sweep is the
+# only way to get them. They are recorded here because this file is the lab's
+# technical record, but they are deliberately absent from handout.tex and from
+# scripts/status.sh, because finding them is the graded exercise. The full map is
+# in solution/.
+#
+# The four target containers are named host1..host4 and carry no service name,
+# because `docker ps`, spawn.sh's log lines and the TUI's node picker are all
+# things a learner sees before they have scanned anything. What each one runs is
+# recorded below and in solution/, not in any string the lab prints.
+[topology]
+switch          = "104_L4_LAB_S1"
+external_subnet = "104.0.0.0/24"     # attacker + router (point-to-point, no switch)
+target_subnet   = "104.1.0.0/24"     # the scanned network (switched segment)
+live_addresses  = 5                  # four hosts plus the router's own interface
+
+  [topology.attacker]
+  ip   = "104.0.0.10"
+  ctn  = "104_L4_LAB_attacker"
+  role = "outside the target network; runs zmap, masscan, nmap and hydra"
+
+  [topology.router]
+  ip   = "104.0.0.1 (ext), 104.1.0.1 (int)"
+  ctn  = "104_L4_LAB_router"
+  role = "forwards between the two subnets and filters nothing; its int address answers a sweep, so a live address is not the same thing as a host with services"
+
+  [topology.host1]
+  ip   = "104.1.0.23"
+  ctn  = "104_L4_LAB_host1"
+  role = "HTTP on 80 (lighttpd 1.4.85); leaks its version in the Server header, and http-enum finds /admin/"
+
+  [topology.host2]
+  ip   = "104.1.0.42"
+  ctn  = "104_L4_LAB_host2"
+  role = "answers ping, listens on nothing; all 1000 scanned ports come back closed, which is what separates a live host from a target"
+
+  [topology.host3]
+  ip   = "104.1.0.87"
+  ctn  = "104_L4_LAB_host3"
+  role = "FTP on 21 (vsftpd 3.0.5), anonymous login enabled; DROPS ICMP echo and timestamp, so a ping sweep misses it entirely and only a TCP probe finds it"
+
+  [topology.host4]
+  ip   = "104.1.0.201"
+  ctn  = "104_L4_LAB_host4"
+  role = "telnet on 23; the shared netadmin account, whose password is in the image's fifty-word list"
+
+# The chain Part 3 turns on. The anonymous FTP share holds a handover note naming
+# the telnet account, so the username is recovered during enumeration rather than
+# handed over. The password appears in no page, file or banner in the lab: it is
+# one of the fifty entries in the wordlist baked into the image, and hydra is what
+# finds which one.
+[credentials]
+telnet_user = "netadmin"
+leak_file   = "104.1.0.87:/pub/handover.txt (anonymous FTP)"
+wordlist    = "/usr/share/minilabs/passwords.txt (50 entries, in the image)"
+
+# Lifecycle actions map one-to-one to wrapper scripts, matching miniManager's
+# item-to-script contract (arguments are passed positionally). Paths are relative
+# to this lab directory.
+[actions]
+spawn        = "scripts/spawn.sh"
+status       = "scripts/status.sh"
+shell_in     = "scripts/shell.sh"
+reset        = "scripts/reset.sh"
+teardown     = "scripts/teardown.sh"
+open_handout = "scripts/handout.sh"

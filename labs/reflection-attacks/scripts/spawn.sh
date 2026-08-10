@@ -15,10 +15,10 @@ log() { echo "[spawn] $*"; }
 
 # Open vSwitch is NOT required on the host: every ovs-vsctl call in this lab runs
 # inside the switch container, whose image ships OVS. Docker reachability is the
-# real prerequisite, and it covers group membership as well as a stopped daemon.
+# real prerequisite, and it covers an unreachable daemon as well as a stopped one.
 command -v docker >/dev/null 2>&1 || { echo "docker not found on host" >&2; exit 1; }
 docker info >/dev/null 2>&1 || {
-    echo "cannot reach the Docker daemon; is it running and are you in the 'docker' group?" >&2
+    echo "cannot reach the Docker daemon; is it running and can this account reach it? (try: docker info)" >&2
     exit 1
 }
 
@@ -35,7 +35,7 @@ ensure_images
 log "starting switch $SW_CTN"
 docker run -d --name "$SW_CTN" --network=none \
     --cap-add=ALL --cap-drop=SYS_RESOURCE --hostname "$SW" \
-    "$SWITCH_IMAGE" >/dev/null
+    "$SWITCH_IMAGE" sh -c "$SWITCH_CMD" >/dev/null
 
 # The router runs privileged so /proc/sys/net is writable: the learner turns on
 # uRPF (rp_filter) at runtime, which a NET_ADMIN-only container cannot do (Docker
@@ -81,10 +81,9 @@ plug() {
     local ctn="$1" want_if="$2" tmp="$3"
     local pid
     pid="$(docker inspect -f '{{.State.Pid}}' "$ctn")"
-    helper_bind_netns "$pid"
     helper ip link set "$tmp" netns "$pid"
-    helper ip netns exec "$pid" ip link set dev "$tmp" name "$want_if"
-    helper ip netns exec "$pid" ip link set dev "$want_if" up
+    helper nsenter --net="/proc/$pid/ns/net" ip link set dev "$tmp" name "$want_if"
+    helper nsenter --net="/proc/$pid/ns/net" ip link set dev "$want_if" up
     echo "$pid"
 }
 
@@ -109,10 +108,9 @@ wire_to_switch() {
     helper ip link add "$ta" type veth peer name "$tb"
     plug "$ctn" "$host_if" "$ta" >/dev/null
     spid="$(docker inspect -f '{{.State.Pid}}' "$SW_CTN")"
-    helper_bind_netns "$spid"
     helper ip link set "$tb" netns "$spid"
-    helper ip netns exec "$spid" ip link set dev "$tb" name "$sw_port"
-    helper ip netns exec "$spid" ip link set dev "$sw_port" up
+    helper nsenter --net="/proc/$spid/ns/net" ip link set dev "$tb" name "$sw_port"
+    helper nsenter --net="/proc/$spid/ns/net" ip link set dev "$sw_port" up
     docker exec "$SW_CTN" ovs-vsctl add-port br0 "$sw_port" >/dev/null
 }
 log "wiring core: $ROUTER_CTN($R_CORE_IF) -> $SW_CTN (port $(sw_port_of router))"

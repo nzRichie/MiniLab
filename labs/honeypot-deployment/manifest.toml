@@ -1,0 +1,81 @@
+title     = "Honeypot deployment and containment"
+layer     = "L7"
+summary   = "Log into a production host with a harvested credential and read what is on it, then take that access away without moving the address the attacker aims at: deploy Cowrie, redirect hostile SSH to it, and find out what a decoy an attacker is logged into can still reach until you contain it."
+images    = ["d_host_honey"]
+handout   = "handout.pdf"
+
+# Four subnets meeting at one router, each holding a single host, so the lab runs
+# no switch and has no shared broadcast domain. The router is the only device
+# that sees traffic between two segments and the only one the learner configures.
+#
+# The addressing is load-bearing in a way no other lab's is. Cowrie refuses to
+# fetch from any address Python's ipaddress.is_global rejects, and fakes a DNS
+# resolution failure instead of reporting the block (cowrie/core/network.py,
+# _is_blocked). On 10.0.0.0/8 or 192.168.0.0/16 the Part 3 pivot would be refused
+# by the honeypot itself and the handout would describe something a learner could
+# never observe. 106.0.0.0/8 is globally routable, so the guard permits it. That
+# is only safe because no lab container has a route off the host; selftest.sh
+# asserts it before generating any traffic.
+[topology]
+external_subnet   = "106.0.0.0/24"   # attacker + router (point-to-point)
+production_subnet = "106.1.0.0/24"   # the protected host + router
+honeypot_subnet   = "106.2.0.0/24"   # the decoy + router
+management_subnet = "106.3.0.0/24"   # admin station + router
+
+  [topology.attacker]
+  ip   = "106.0.0.10"
+  ctn  = "106_L7_LAB_attacker"
+  role = "outside everything it attacks; arrives holding a working credential, runs no exploit"
+
+  [topology.router]
+  ip   = "106.0.0.1 (ext), 106.1.0.1 (prod), 106.2.0.1 (honey), 106.3.0.1 (mgmt)"
+  ctn  = "106_L7_LAB_router"
+  role = "forwards between all four segments and carries the site's edge filter; both defences are written here"
+
+  [topology.prod]
+  ip   = "106.1.0.20"
+  ctn  = "106_L7_LAB_prod"
+  role = "the protected host: sshd on 22, lighttpd on 80, the handover note, and the two logs both oracles read"
+
+  [topology.honeypot]
+  ip   = "106.2.0.10"
+  ctn  = "106_L7_LAB_honeypot"
+  role = "Cowrie 3.0.12 under /opt/cowrie, installed but not configured and not running; the learner deploys it"
+
+  [topology.admin]
+  ip   = "106.3.0.30"
+  ctn  = "106_L7_LAB_admin"
+  role = "management station; its access to the real production host is the liveness check paired with every defence stage"
+
+# The site's edge filter, loaded by default_config/router.sh before the learner
+# arrives: the external network may reach production's SSH port and nothing else.
+# It says nothing about what the internal segments may reach, which is the gap
+# Part 3 is about and a realistic omission for a filter written against outsiders.
+[baseline_policy]
+external_to_prod = "tcp/22 accepted, everything else to 106.1.0.0/24 dropped"
+honeypot_egress  = "unrestricted until the learner writes the containment rule"
+
+# The credential the attacker arrives holding. Part 1 is not a password attack;
+# the lab starts after the attacker is already inside, so the credential is handed
+# over in the handout rather than guessed. The learner configures the decoy to
+# accept the same pair, which is what makes the second login behave like the first.
+[credentials]
+user = "netadmin"
+pass = "Rotterdam-4417"
+
+# The two markers the oracles grep for. Neither string appears anywhere else in
+# the lab, so finding one in a capture is unambiguous evidence the data moved.
+[markers]
+handover_note     = "PROD-HANDOVER-9F2C41 in /srv/internal/handover.txt (SSH only)"
+internal_document = "INTERNAL-ROUTING-PLAN-77D3E8 at http://106.1.0.20/internal.html (the Part 3 pivot target)"
+
+# Lifecycle actions map one-to-one to wrapper scripts, matching miniManager's
+# item-to-script contract (arguments are passed positionally). Paths are relative
+# to this lab directory.
+[actions]
+spawn        = "scripts/spawn.sh"
+status       = "scripts/status.sh"
+shell_in     = "scripts/shell.sh"
+reset        = "scripts/reset.sh"
+teardown     = "scripts/teardown.sh"
+open_handout = "scripts/handout.sh"

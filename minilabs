@@ -16,9 +16,10 @@ cd "$ROOT"
 [ -f ./config.toml ] || { echo "config.toml is missing from $ROOT" >&2; exit 1; }
 
 if ! docker info >/dev/null 2>&1; then
-    echo "Cannot reach the Docker daemon. Check that Docker is running and that" >&2
-    echo "your account is in the 'docker' group:" >&2
-    echo "    sudo usermod -aG docker \"\$USER\"    # then log out and back in" >&2
+    echo "Cannot reach the Docker daemon. Start it and check your access:" >&2
+    echo "    rootless:  systemctl --user start docker" >&2
+    echo "    rootful:   sudo systemctl start docker" >&2
+    echo "               sudo usermod -aG docker \"\$USER\"    # then log out and back in" >&2
     exit 1
 fi
 
