@@ -22,6 +22,14 @@ file on it, including other accounts' work. A rootless daemon runs as the studen
 and maps container root to their own user id, so a lab cannot reach outside their
 own files.
 
+For both versions run:
+
+```bash
+sudo apt install -y docker openvswitch-switch
+```
+
+For Rootless run:
+
 ```bash
 # Rootless (Ubuntu). docker-ce-rootless-extras comes from Docker's own apt
 # repository, and carries the AppArmor profile Ubuntu 24.04 and later need.
