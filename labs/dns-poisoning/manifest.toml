@@ -1,0 +1,78 @@
+title   = "DNS cache poisoning and resolver hardening"
+layer   = "L7"
+summary = "Poison a caching resolver's cache from a network its queries never cross: measure the one source port it always sends from, sweep all 65,536 transaction IDs inside the 400 ms it waits for the real answer, and leave the campus resolving a university's web address to the attacker's machine for a day. Then close it three times: a fresh source port per query, recursion for the campus only, and DNSSEC validation, which refuses the forged answer even when it wins the race."
+images  = ["miniinterneteth/d_switch", "d_host_dns"]
+handout = "handout.pdf"
+
+# Layer 7, and off-path by construction. The attacker sits on a point-to-point
+# link of its own, so the resolver's queries to the authoritative server never
+# cross it and every value the attack needs is either forged, chosen, measured
+# indirectly, or guessed. Three networks meet at one router:
+#
+#   victim ---+
+#             +-- S1 (OVS) -- router --+-- auth      (uni.lab, 400 ms away)
+#   resolver -+                        +-- attacker  (attack.lab, and the spoofer)
+#
+# Both name servers run BIND 9.18. The resolver arrives with three settings
+# weakened, and Part 2 of the handout is where each is rewritten.
+[topology]
+switch          = "107_L7_LAB_S1"
+campus_subnet   = "107.1.0.0/24"     # resolver + campus host, switched segment
+auth_subnet     = "107.2.0.0/24"     # authoritative server, point-to-point
+hostile_subnet  = "107.3.0.0/24"     # attacker, point-to-point
+target_name     = "www.uni.lab"
+probe_zone      = "attack.lab"
+
+  [topology.resolver]
+  ip   = "107.1.0.10"
+  ctn  = "107_L7_LAB_resolver"
+  role = "BIND 9.18 caching resolver; the machine under attack and the one hardened in Part 2"
+
+  [topology.victim]
+  ip   = "107.1.0.20"
+  ctn  = "107_L7_LAB_victim"
+  role = "campus host; asks the resolver, believes the answer, and is where the poisoning is read"
+
+  [topology.auth]
+  ip   = "107.2.0.10"
+  ctn  = "107_L7_LAB_auth"
+  role = "authoritative for uni.lab, signed with a DNSSEC policy from the moment it starts; serves the real www.uni.lab banner on port 80; sits behind slow-link, which holds every reply back by 400 ms"
+
+  [topology.attacker]
+  ip   = "107.3.0.10"
+  ctn  = "107_L7_LAB_attacker"
+  role = "authoritative for attack.lab, which is how it reads the resolver's outgoing source port; runs dns-spoof; serves the impostor banner on port 80"
+
+  [topology.router]
+  ip   = "107.1.0.1 (campus), 107.2.0.1 (auth), 107.3.0.1 (hostile)"
+  ctn  = "107_L7_LAB_router"
+  role = "forwards between all three networks with rp_filter off, so a forged source address crosses it; ingress filtering is the source-spoofing lab's subject, not this one's"
+
+# The three settings the lab turns on and off, all in /etc/bind/hardening.conf on
+# the resolver. They start weak. Every one of them is a line the learner rewrites
+# by hand; solution/ holds the reference version of each.
+[resolver_settings]
+query_source_port  = 33333        # pinned rather than randomised: the whole of Part 1 rests on it
+allow_recursion    = "any"        # an open resolver: the attacker can trigger a query on demand
+dnssec_validation  = "no"         # the zone is signed throughout; nothing checks the signatures
+cookies            = "off"        # RFC 7873 would add a value an off-path attacker cannot echo
+
+# The two figures the attack's arithmetic runs on. The delay is configured; the
+# sweep rate is measured on the machine the lab runs on and is reported by
+# dns-spoof, so the handout has the learner read their own rather than quoting one.
+[timing]
+auth_delay_ms   = 400             # slow-link, in front of named on the auth container
+txid_space      = 65536           # 16-bit query ID, RFC 1035 section 4.1.1
+legit_ttl       = 60              # the zone's own TTL on www.uni.lab
+poison_ttl      = 86400           # what the attacker writes into the forged answer
+
+# Lifecycle actions map one-to-one to wrapper scripts, matching miniManager's
+# item-to-script contract (arguments are passed positionally). Paths are relative
+# to this lab directory.
+[actions]
+spawn        = "scripts/spawn.sh"
+status       = "scripts/status.sh"
+shell_in     = "scripts/shell.sh"
+reset        = "scripts/reset.sh"
+teardown     = "scripts/teardown.sh"
+open_handout = "scripts/handout.sh"

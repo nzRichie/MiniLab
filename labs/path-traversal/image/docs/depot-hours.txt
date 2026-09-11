@@ -1,0 +1,7 @@
+Brindle Logistics -- depot collection hours
+
+Aldermoor    Mon-Fri 07:00-18:30   Sat 08:00-12:00
+Carrick      Mon-Fri 06:30-19:00   Sat closed
+Weatherby    Mon-Fri 07:00-17:00   Sat 08:00-11:30
+
+Collections booked after 15:00 are loaded the following working day.

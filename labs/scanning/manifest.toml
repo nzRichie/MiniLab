@@ -16,8 +16,8 @@ handout   = "handout.pdf"
 # in solution/.
 #
 # The four target containers are named host1..host4 and carry no service name,
-# because `docker ps`, spawn.sh's log lines and the TUI's node picker are all
-# things a learner sees before they have scanned anything. What each one runs is
+# because `docker ps`, spawn.sh's log lines and the node list shell.sh prints
+# are all things a learner sees before they have scanned anything. What each one runs is
 # recorded below and in solution/, not in any string the lab prints.
 [topology]
 switch          = "104_L4_LAB_S1"

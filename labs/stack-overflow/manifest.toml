@@ -1,0 +1,36 @@
+title     = "Stack overflow to control flow"
+layer     = "L7"
+summary   = "An appliance runs a device registration service that copies the device name out of a request into a 64-byte array in a stack frame, with nothing comparing the number of bytes copied against the size of the array. The learner measures the distance from that array to the saved return address, overwrites the return address with the address of a function already in the binary, and reads back the recovery key that function prints. The defence is five rebuilds of the same source with different compiler and linker flags, and no change to the program: checked libc calls, full RELRO, a position-independent build, a stack canary, and all four at once. Three of the four leave the exploit working and one stops it, which is the point: a hardening flag defends the mechanism it was designed for and nothing else. The graded end state is that build, measured by two facts at once: the overflow no longer reaches the function that prints the key, and a legitimate registration still gets its reply."
+images    = ["d_host_stackovf", "miniinterneteth/d_switch"]
+handout   = "handout.pdf"
+
+# One switched segment and no router. The bug is in a program rather than in the
+# network, and every stage of the defence is a property of a file on the
+# appliance, so a second segment would add a boundary nothing in the lab is
+# measured on.
+#
+# The appliance runs with seccomp unconfined, and only the appliance. Turning
+# address-space randomisation off for one process needs
+# personality(ADDR_NO_RANDOMIZE), which Docker's default seccomp profile does
+# not allow; the alternative, kernel.randomize_va_space, is global to the machine
+# and is not writable from a container at all.
+[topology]
+subnet = "121.0.0.0/24"
+switch = "121_L7_LAB_S1, one Open vSwitch bridge, no STP, no VLANs"
+hosts  = [
+  "121_L7_LAB_svc = 121.0.0.10 (the appliance; devregd on TCP 9000, the source, gdb and gcc)",
+  "121_L7_LAB_ops = 121.0.0.20 (the operator's workstation; the legitimate caller)",
+  "121_L7_LAB_attacker = 121.0.0.66 (the machine the overflow is sent from)",
+]
+
+# Lifecycle actions map one-to-one to wrapper scripts, matching miniManager's
+# item-to-script contract (arguments are passed positionally). Paths are relative
+# to this lab directory. This lab needs no `advance` action: nothing moves on its
+# own, the learner drives both the attack and every rebuild.
+[actions]
+spawn        = "scripts/spawn.sh"
+status       = "scripts/status.sh"
+shell_in     = "scripts/shell.sh"
+reset        = "scripts/reset.sh"
+teardown     = "scripts/teardown.sh"
+open_handout = "scripts/handout.sh"

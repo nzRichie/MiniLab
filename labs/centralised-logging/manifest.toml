@@ -1,0 +1,60 @@
+title     = "Centralised logging and incident reconstruction"
+layer     = "L7"
+summary   = "Three machines that write their log messages to their own disks and send them nowhere, and a log server that listens on no port. Build the forwarding over TCP, a destination file per source host, and a rotation policy the running daemon survives. Then an intrusion runs across all three machines and the local log on the machine it happened to is deleted, and every question about what happened has to be answered from the collector alone."
+images    = ["d_host_log", "miniinterneteth/d_switch"]
+handout   = "handout.pdf"
+
+# One switched segment, four machines, no router. Nothing in this lab is about
+# reaching somewhere: every machine is one hop from every other, so a message
+# that does not arrive at the collector failed for a reason in the logging
+# configuration and never for a reason in the network. Addresses are fixed so the
+# handout can name them and a lab script knows every address before the container
+# exists.
+[topology]
+subnet       = "113.0.0.0/24"
+syslog_port  = 514
+
+  [topology.collector]
+  host     = "113_L7_LAB_collector = 113.0.0.10"
+  role     = "the log server; at spawn it listens on no port and holds no rule for anything arriving from another machine"
+  services = [ "rsyslog 8.2310, local only until Part 2" ]
+
+  [topology.admin]
+  host     = "113_L7_LAB_admin = 113.0.0.20"
+  role     = "the administrator's workstation; the source of the routine work the incident has to be told apart from"
+  services = [ "tcp/22 sshd, password authentication on", "account: ops" ]
+
+  [topology.web]
+  host     = "113_L7_LAB_web = 113.0.0.30"
+  role     = "the public web service; the machine the incident's login attempts come from"
+  services = [ "tcp/80 lighttpd, both logs sent to syslog", "no sshd" ]
+
+  [topology.db]
+  host     = "113_L7_LAB_db = 113.0.0.40"
+  role     = "the sensitive host; the incident happens to it and its /var/log/messages is the file that gets deleted"
+  services = [ "tcp/22 sshd, password authentication on", "account: dbadmin" ]
+
+  [topology.switch]
+  host  = "113_L7_LAB_S1"
+  role  = "one Open vSwitch bridge, no STP, no VLANs"
+  ports = [ "113-collector", "113-admin", "113-web", "113-db" ]
+
+# Lifecycle actions map one-to-one to wrapper scripts, matching miniManager's
+# item-to-script contract (arguments are passed positionally). Paths are relative
+# to this lab directory.
+#
+# `incident` is a seventh action no other lab in the catalogue carries. It runs
+# the intrusion and then deletes the local log on the machine it happened to, and
+# it exists because that has to happen after the learner's forwarding and
+# collector rules are in place: before that the collector holds nothing, and an
+# incident nobody recorded is not something anybody can reconstruct. It refuses
+# to run, and destroys nothing, until it has proved by sending a message that the
+# collector is recording db.
+[actions]
+spawn        = "scripts/spawn.sh"
+status       = "scripts/status.sh"
+shell_in     = "scripts/shell.sh"
+incident     = "scripts/incident.sh"
+reset        = "scripts/reset.sh"
+teardown     = "scripts/teardown.sh"
+open_handout = "scripts/handout.sh"

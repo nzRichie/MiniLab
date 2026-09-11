@@ -1,0 +1,85 @@
+title     = "Path traversal to credential reuse"
+layer     = "L7"
+summary   = "A customer portal serves documents through a viewer that joins the value of a query parameter to a directory name and opens the result, so a value holding ../ names a file outside that directory. The learner walks a chain in which every step's target is named by the step before it: /etc/passwd to confirm the bug, the web server's configuration to find the document root, the viewer's own source to find where its database credentials come from, and then that credential file. Part 1 ends with a database session opened from the attacker's own machine, reading a customer table no request to the portal ever touches. The defence is four changes to configuration and none to the viewer: a rule rejecting ../ in the query string, which the same read gets past spelled %2e%2e%2f; open_basedir, which is checked on the resolved path and stops every spelling but cannot exclude the credential file the viewer includes; the shared database account bound to the web tier's address, which refuses the attacker and stops the nightly report job at the same time; and finally one account per tier, each bound to its own address. The traversal still discloses a working password at the end, and that is the graded end state: the password names an account the database accepts from one address, and the attacker is not at it."
+images    = ["d_host_traversal", "miniinterneteth/d_switch"]
+handout   = "handout.pdf"
+
+# One segment, one switch, four hosts. There is no router and no gateway,
+# because every control in this lab is applied on a host rather than on a
+# boundary device: two on the web server's own configuration and two on the
+# database's account table. The database sees the address of whichever host
+# opened the connection either way, which is what lets an account name the tier
+# it belongs to.
+[topology]
+subnet = "123.0.0.0/24"
+switch = "123_L7_LAB_S1, one Open vSwitch bridge, no STP, no VLANs"
+hosts  = [
+  "123_L7_LAB_web = 123.0.0.10 (the portal; lighttpd, view.php over php-cgi, documents in /srv/docs)",
+  "123_L7_LAB_db = 123.0.0.20 (MariaDB 10.11 on 3306, holding the portal database)",
+  "123_L7_LAB_reports = 123.0.0.30 (the nightly report job; the second tier on the shared account)",
+  "123_L7_LAB_attacker = 123.0.0.66 (the machine every request is sent from; curl and the mariadb client)",
+]
+
+# Lifecycle actions map one-to-one to wrapper scripts, matching miniManager's
+# item-to-script contract (arguments are passed positionally). Paths are relative
+# to this lab directory. This lab needs no `advance` action: nothing moves on its
+# own, the learner drives every step of the chain and every stage of the defence.
+[actions]
+spawn        = "scripts/spawn.sh"
+status       = "scripts/status.sh"
+shell_in     = "scripts/shell.sh"
+reset        = "scripts/reset.sh"
+teardown     = "scripts/teardown.sh"
+open_handout = "scripts/handout.sh"
+
+# --------------------------------------------------------------------------
+# Four things about the built lab differ from the sketch in LessonPlan.md.
+#
+# 1. Five containers, not four. The plan's count is of hosts, and there are four
+#    of them; they need a segment, and that is one Open vSwitch container.
+#
+# 2. There is a fourth host the plan does not name, and it is what makes "a
+#    per-tier credential" mean anything. With only web, db and attacker there is
+#    no second tier, so binding the disclosed account to the web tier's address
+#    would be the whole defence and "per tier" would be a word the handout could
+#    not demonstrate. The reports host runs a nightly job that connects with the
+#    SAME account, so stage 2C -- binding that one account to the web tier --
+#    refuses the attacker and stops the report job at the same time. That is the
+#    wrong first move, and it is the reason stage 2D exists. selftest.sh asserts
+#    the report job is broken after 2C, so a change that left it running would
+#    fail there rather than quietly making 2D pointless.
+#
+# 3. The plan's "read-only mount that hides the rest of the filesystem" became
+#    PHP's open_basedir. A read-only mount cannot be applied from inside a
+#    running container over docker exec, and doing it with --read-only would
+#    mean tearing the lab down and respawning it mid-exercise; the
+#    command-injection lab hit the same wall and made the same substitution.
+#    open_basedir closes what the mount would have closed and is checked on the
+#    RESOLVED path, so no spelling of the traversal gets past it, which is what
+#    makes it the answer to the encoding bypass stage 2A cannot stop. Its limit
+#    is the teaching point rather than a weakness: the credential file has to
+#    stay on the list because the viewer includes it, so confinement narrows the
+#    filesystem to the three directories the application opens and leaves the one
+#    disclosure that matters. Answer 14 says so and names the two stronger forms
+#    the lab cannot reach without changing the program.
+#
+# 4. The database refuses with error 1130, not 1045. 1130 is the host-level
+#    check: no account in the server's table has a host part that could match
+#    123.0.0.66, so the connection is rejected before any account NAME is
+#    considered, and the message names the address the connection came from. 1045
+#    is the account-level refusal and would appear only if some account were
+#    still granted from a host part matching that address. Question 16 is built
+#    on the difference, and selftest.sh asserts the 1130.
+#
+# One environment fact the lab depends on: skip-name-resolve=1 in
+# default_config/db.sh. With it set, the host part of an account is matched
+# against the client's address; without it the server resolves that address to a
+# name first and matches the name, and these containers have no reverse zone to
+# resolve in.
+#
+# What this lab deliberately does not grade: the grant each account holds. Both
+# accounts keep SELECT on the whole database at the end, so the web tier's
+# account can still read the customer table it has no use for. Narrowing a grant
+# is what the SQL injection lab (AS 122) is built around, and the control this
+# lab is built around is WHERE an account may be used from. Answer 19 draws the
+# line between the two.

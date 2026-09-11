@@ -1,0 +1,41 @@
+title    = "Addressing and static routing"
+layer     = "L3"
+summary   = "Build a three-subnet network from nothing: address ten interfaces, give each host a default route, add one static route per router, until all thirty host pairs reach each other."
+images    = ["miniinterneteth/d_switch", "d_host_netcfg"]
+handout   = "handout.pdf"
+
+# Three switched subnets joined by two Linux routers. Middle Net carries both
+# routers, which is what joins West Net to East Net and what makes an ICMP
+# redirect happen there. Addresses are fixed so the handout can name them and a
+# lab script knows every address before the container exists; none of them is
+# configured at spawn, because configuring them is the lab.
+[topology]
+
+  [topology.west]
+  subnet   = "192.168.1.0/24"
+  switch   = "108_L3_LAB_S-WEST"
+  hosts    = [ "108_L3_LAB_west-1 = 192.168.1.11", "108_L3_LAB_west-2 = 192.168.1.12" ]
+  router   = "108_L3_LAB_west-router = 192.168.1.1"
+
+  [topology.middle]
+  subnet   = "192.168.2.0/24"
+  switch   = "108_L3_LAB_S-MID"
+  hosts    = [ "108_L3_LAB_mid-1 = 192.168.2.11", "108_L3_LAB_mid-2 = 192.168.2.12" ]
+  routers  = [ "108_L3_LAB_west-router = 192.168.2.2", "108_L3_LAB_east-router = 192.168.2.1" ]
+
+  [topology.east]
+  subnet   = "192.168.3.0/24"
+  switch   = "108_L3_LAB_S-EAST"
+  hosts    = [ "108_L3_LAB_east-1 = 192.168.3.11", "108_L3_LAB_east-2 = 192.168.3.12" ]
+  router   = "108_L3_LAB_east-router = 192.168.3.1"
+
+# Lifecycle actions map one-to-one to wrapper scripts, matching miniManager's
+# item-to-script contract (arguments are passed positionally). Paths are relative
+# to this lab directory.
+[actions]
+spawn        = "scripts/spawn.sh"
+status       = "scripts/status.sh"
+shell_in     = "scripts/shell.sh"
+reset        = "scripts/reset.sh"
+teardown     = "scripts/teardown.sh"
+open_handout = "scripts/handout.sh"

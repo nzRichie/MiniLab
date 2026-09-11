@@ -1,0 +1,69 @@
+title    = "OSPF configuration and path selection"
+layer     = "L3"
+summary   = "Configure five FRR routers from nothing over vtysh: twenty-two interface addresses, five loopbacks, five host default routes, and OSPF in one area, until all twenty host pairs reach each other. Then measure the network you built, find the two-hop path that takes 210 ms, move traffic onto the three-hop path that takes 30 ms by raising one link cost at both ends, and stop the routers sending OSPF onto the five links where only a host is listening."
+images    = ["d_node_ospf"]
+handout   = "handout.pdf"
+
+# Five routers on a pentagon with one chord, each with one host behind it. Every
+# router-to-router link is a point-to-point /30 veth; there is no switch and no OVS.
+# PARI and NEWY carry three links each, the rest carry two.
+#
+# Addresses follow the Waikato COMPX304 assignment's plan, so the arithmetic
+# carries over to the BGP labs a student meets next: a router's location number Y
+# gives its host subnet 109.[100+Y].0.0/24 and its loopback 109.[150+Y].0.1/32.
+# None of these addresses exists at spawn. Configuring them is the lab.
+[topology]
+area          = "0.0.0.0"
+links         = "LOND-NEWY, NEWY-ZURI, ZURI-TRGA, TRGA-PARI, PARI-LOND, PARI-NEWY"
+slow_link     = "NEWY-ZURI, 100 ms each way; every other link is 5 or 10 ms"
+raised_cost   = "100 on both ends of NEWY-ZURI, against the default 10"
+measured_pair = "LOND's host to ZURI's host: 210 ms over two hops, 30 ms over three"
+
+  [topology.lond]
+  location = 1
+  role     = "one end of the pair whose path is measured and moved"
+  router   = "109_L3_OSPF_lond"
+  host     = "109_L3_OSPF_lond-host (109.101.0.1)"
+  loopback = "109.151.0.1/32"
+
+  [topology.pari]
+  location = 2
+  role     = "three links; on the fast path once the cost is raised"
+  router   = "109_L3_OSPF_pari"
+  host     = "109_L3_OSPF_pari-host (109.102.0.1)"
+  loopback = "109.152.0.1/32"
+
+  [topology.trga]
+  location = 3
+  role     = "on the fast path once the cost is raised"
+  router   = "109_L3_OSPF_trga"
+  host     = "109_L3_OSPF_trga-host (109.103.0.1)"
+  loopback = "109.153.0.1/32"
+
+  [topology.newy]
+  location = 4
+  role     = "three links; holds the 100 ms link to ZURI"
+  router   = "109_L3_OSPF_newy"
+  host     = "109_L3_OSPF_newy-host (109.104.0.1)"
+  loopback = "109.154.0.1/32"
+
+  [topology.zuri]
+  location = 5
+  role     = "the far end of that pair; two hops away over the slow link"
+  router   = "109_L3_OSPF_zuri"
+  host     = "109_L3_OSPF_zuri-host (109.105.0.1)"
+  loopback = "109.155.0.1/32"
+
+# Lifecycle actions map one-to-one to wrapper scripts, matching miniManager's
+# item-to-script contract (arguments pass positionally). Paths are relative to this
+# lab directory. solution/configure.sh applies the same configuration
+# non-interactively for scripts/selftest.sh; it is not a menu action, and the
+# handout does not name it, so nothing invites a learner to skip the configuration
+# the lab is teaching.
+[actions]
+spawn        = "scripts/spawn.sh"
+status       = "scripts/status.sh"
+shell_in     = "scripts/shell.sh"
+reset        = "scripts/reset.sh"
+teardown     = "scripts/teardown.sh"
+open_handout = "scripts/handout.sh"

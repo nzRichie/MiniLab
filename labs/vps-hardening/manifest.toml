@@ -1,0 +1,40 @@
+title     = "VPS provisioning and hardening"
+layer     = "L7"
+summary   = "Take a server delivered the way a hosting provider hands one over (root reachable over SSH with a password, three services on every address, no packet filter) and close each of those in turn, until the public site still serves anyone who asks, SSH accepts one key from the management subnet, and every other port discards what arrives rather than replying to it."
+images    = ["d_host_vps"]
+handout   = "handout.pdf"
+
+# Three point-to-point segments meeting at one router. The router forwards
+# between all three and filters nothing, which is what makes the server's own
+# configuration the whole of its defence: the outside host can put a packet in
+# front of every port the server holds, including the SSH port on an address the
+# lab calls "management". Addresses are fixed so the handout can name them and a
+# lab script knows every address before the container exists.
+[topology]
+
+  [topology.external]
+  subnet = "110.0.0.0/24"
+  hosts  = [ "110_L7_LAB_outside = 110.0.0.10" ]
+  router = "110_L7_LAB_router = 110.0.0.1"
+
+  [topology.server]
+  subnet   = "110.1.0.0/24"
+  hosts    = [ "110_L7_LAB_server = 110.1.0.20" ]
+  router   = "110_L7_LAB_router = 110.1.0.1"
+  services = [ "tcp/22 sshd", "tcp/80 public site", "tcp/8080 administrative page" ]
+
+  [topology.management]
+  subnet = "110.2.0.0/24"
+  hosts  = [ "110_L7_LAB_admin = 110.2.0.30" ]
+  router = "110_L7_LAB_router = 110.2.0.1"
+
+# Lifecycle actions map one-to-one to wrapper scripts, matching miniManager's
+# item-to-script contract (arguments are passed positionally). Paths are relative
+# to this lab directory.
+[actions]
+spawn        = "scripts/spawn.sh"
+status       = "scripts/status.sh"
+shell_in     = "scripts/shell.sh"
+reset        = "scripts/reset.sh"
+teardown     = "scripts/teardown.sh"
+open_handout = "scripts/handout.sh"

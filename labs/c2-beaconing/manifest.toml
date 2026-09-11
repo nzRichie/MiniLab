@@ -1,0 +1,59 @@
+title     = "Malware command-and-control traffic analysis"
+layer     = "L7"
+summary   = "Three workstations, a gateway, and an outside segment they all fetch from. One workstation runs an implant that checks in with a controller, and every other machine polls a monitoring endpoint on exactly the same period, so regularity alone picks out four flows rather than one. Capture at the gateway, separate the check-in from the polls, then write the gateway's egress policy: the controller stops hearing from the implant while the three legitimate services keep answering. The implant then moves to TLS on 443 with a jittered interval, and the controller moves to an address that has appeared in no capture, which is what a rule naming one destination cannot survive and an allowlist can."
+images    = ["d_host_c2", "miniinterneteth/d_switch"]
+handout   = "handout.pdf"
+
+# Two segments meeting at the gateway, each with a switch of its own so that no
+# port of one is a port of the other. The gateway forwards and does NOT
+# translate addresses: every packet crossing it still carries the workstation's
+# own source address, which is what makes a capture taken there say which inside
+# host produced each flow.
+#
+# The inside addresses are fixed and named here so the handout can quote them.
+# The outside addresses are fixed too, but the handout does not list them and
+# the topology figure does not draw them: which addresses exist out there, and
+# which one is the controller, is what the learner discovers from a capture.
+[topology]
+
+  [topology.inside]
+  subnet  = "118.0.0.0/24"
+  hosts   = [
+    "118_L7_LAB_ws1 = 118.0.0.21",
+    "118_L7_LAB_ws2 = 118.0.0.32",
+    "118_L7_LAB_ws3 = 118.0.0.43",
+  ]
+  gateway = "118_L7_LAB_gw = 118.0.0.1"
+  switch  = "118_L7_LAB_S1, one Open vSwitch bridge, no STP, no VLANs"
+  role    = "the workstations. All three browse and all three poll a monitoring endpoint every 30 seconds; one of them also runs the implant"
+
+  [topology.outside]
+  subnet   = "118.1.0.0/24"
+  hosts    = [ "118_L7_LAB_ext1", "118_L7_LAB_ext2" ]
+  gateway  = "118_L7_LAB_gw = 118.1.0.1"
+  switch   = "118_L7_LAB_S2, one Open vSwitch bridge, no STP, no VLANs"
+  services = [
+    "package mirror: tcp/80 lighttpd, four pages between 60 bytes and 30 kB",
+    "documentation site: tcp/80, the same lighttpd on a second address",
+    "monitoring endpoint: tcp/80, /health rewritten every 5 seconds so its length varies",
+    "controller: tcp/8080 plain and tcp/443 TLS, one python3 process, logs every arrival",
+  ]
+  note     = "INSTRUCTOR: five addresses over two containers. Which of them is the controller is an answer to the exercise and is deliberately absent from the handout, the figure and status.sh; scripts/lib.sh names it."
+
+# Lifecycle actions map one-to-one to wrapper scripts, matching miniManager's
+# item-to-script contract (arguments are passed positionally). Paths are relative
+# to this lab directory.
+#
+# `advance` is a seventh action this lab needs and most do not. The subject here
+# is not one fixed end state but a sequence: the learner writes a rule against
+# what they measured, and then what they measured changes and the rule has to
+# answer for itself. Something other than the learner's own configuration has to
+# move the incident on.
+[actions]
+spawn        = "scripts/spawn.sh"
+status       = "scripts/status.sh"
+shell_in     = "scripts/shell.sh"
+advance      = "scripts/advance.sh"
+reset        = "scripts/reset.sh"
+teardown     = "scripts/teardown.sh"
+open_handout = "scripts/handout.sh"

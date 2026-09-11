@@ -1,0 +1,73 @@
+title     = "SQL injection to credential disclosure"
+layer     = "L7"
+summary   = "A storefront pastes a query parameter straight into the SQL text it sends. The learner works four techniques against it in order: a tautology returning products the search was written to hide, a UNION reaching the shop's own account table, blind boolean extraction of that same table through a second endpoint that prints nothing but a yes or a no, and LOAD_FILE reading a file off the database host, which holds a second database account and its password. Part 1 ends with a login straight to the database with that password, no web request involved. The defence is three changes to the database and none to either program: the application's grant narrowed from the whole database to the one table it reads, its global FILE privilege revoked, and a rule letting only the web tier open a connection to port 3306. Three of the four techniques stop and the tautology does not, because the rows it exposes live in the table the application is entitled to read. The graded end state is measured by two facts at once: the account table's contents no longer leave the database, and the search still returns its published catalogue."
+images    = ["d_host_sqli", "miniinterneteth/d_switch"]
+handout   = "handout.pdf"
+
+# One segment, one switch, three hosts. There is no router and no gateway,
+# because Part 2C's rule is an input filter on the database host itself: it needs
+# no boundary device to sit on, and every packet the database receives still
+# carries the address of the host that sent it, which is what lets that rule name
+# the web tier.
+[topology]
+subnet = "122.0.0.0/24"
+switch = "122_L7_LAB_S1, one Open vSwitch bridge, no STP, no VLANs"
+hosts  = [
+  "122_L7_LAB_web = 122.0.0.10 (the storefront; lighttpd, search.php and stock.php over php-cgi)",
+  "122_L7_LAB_db = 122.0.0.20 (MariaDB 10.11 on 3306, holding the shop database)",
+  "122_L7_LAB_attacker = 122.0.0.66 (the machine every request is sent from; curl and the mariadb client)",
+]
+
+# Lifecycle actions map one-to-one to wrapper scripts, matching miniManager's
+# item-to-script contract (arguments are passed positionally). Paths are relative
+# to this lab directory. This lab needs no `advance` action: nothing moves on its
+# own, the learner drives every technique and every stage of the defence.
+[actions]
+spawn        = "scripts/spawn.sh"
+status       = "scripts/status.sh"
+shell_in     = "scripts/shell.sh"
+reset        = "scripts/reset.sh"
+teardown     = "scripts/teardown.sh"
+open_handout = "scripts/handout.sh"
+
+# --------------------------------------------------------------------------
+# Four things about the built lab differ from the sketch in LessonPlan.md.
+#
+# 1. Four containers, not three. The plan's count is of hosts; the three of them
+#    need a segment, and that is one Open vSwitch container.
+#
+# 2. Two endpoints in one application, not one. The plan has the blind technique
+#    run "once the page is switched to return nothing but a yes or no", which is
+#    a change to the page mid-lab. It became a second endpoint instead,
+#    stock.php, which prints IN STOCK or OUT OF STOCK and nothing else and
+#    carries the same bug in a numeric context rather than a string one. That
+#    makes blind extraction the only technique available against it rather than
+#    a slower way to do what the UNION already did from search.php, and it gives
+#    the handout a real question about why the request count differs. The
+#    numeric context is a second gain the switch was not made for: a payload for
+#    stock.php supplies no quote and needs no comment marker, which is Question
+#    7.
+#
+# 3. The fourth technique chains into a direct login, which is what makes the
+#    reachability defence load-bearing. None of the four techniques run through
+#    the page is stopped by a rule on the database's port, so without the pivot
+#    Part 2C would close a capability the learner had never used. LOAD_FILE
+#    therefore reads /etc/mysql/backup.cnf, which holds the nightly dump job's
+#    account and password, and Part 1 ends with that password opening a client
+#    session straight to 3306. Both grant changes leave that session working,
+#    because the password was copied off the machine before either one was made
+#    and because both were aimed at a different account. That is Question 15 and
+#    it is the sharpest thing in the lab after the tautology surviving.
+#
+# 4. The vulnerable program is PHP and is not compiled. This category's rule
+#    about building the binary in image/ exists because the offsets a handout
+#    quotes are facts about one build; a SQL injection has no offsets, and the
+#    artifact this handout quotes is one line of source. The source is still
+#    baked into the image rather than downloaded, and default_config/web.sh
+#    reinstalls both endpoints from the pristine copies on every spawn and every
+#    reset.
+#
+# One environment fact the lab depends on and did not weaken: MariaDB's
+# secure_file_priv defaults to NULL here, and in MariaDB that means LOAD_FILE
+# reads from anywhere rather than being disabled, which is the opposite of
+# MySQL's reading of the same value. Nothing in default_config/db.sh sets it.

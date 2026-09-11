@@ -1,0 +1,210 @@
+title     = "Scanning range (randomised)"
+mode      = "range"
+layer     = "L4"
+summary   = "A randomised reconnaissance range. Every spawn draws a different network from a seed: a different graph, different subnets, different machines, a service for each drawn from seventeen, a different organisation whose network it is, a different opening move, and a different word that changes how the whole range answers. Sweep what you are given, work out which segments exist and how far away each one is, identify the software behind every open port and what kind of machine holds it, and then turn one of those services into a way in. At the end of that is a flag. You are scored on what you found and how far in you got, and claiming what is not there costs marks."
+
+images    = ["miniinterneteth/d_switch", "d_host_range"]
+handout   = "handout.pdf"
+
+# A range, not a fixed lab. The [topology] block below documents the SHAPE the
+# generator can draw and the rules the addressing obeys; it names no address,
+# because there is none until a seed is drawn. `scripts/generate.sh <tier>
+# [seed]` writes the drawn range to state/topology.env, which is gitignored and
+# ships in neither release profile.
+#
+# A (tier, seed) pair reproduces a range exactly. The seed is printed by Spawn,
+# by Status and on every line Score prints, so a tutor can set one seed for a
+# whole class and compare scores against each other, and a range that generates
+# badly is pinned in a bug report rather than described.
+#
+# There is no solution/ directory and no solutions.pdf. A range has no fixed
+# answer to key: the key is generated per spawn and printed by the Reveal action,
+# which unlocks after Score has run once.
+[topology]
+as             = 116
+prefix         = "116.<second>.0.0/16"   # the second octet is drawn per seed
+attacker       = "116.<second>.0.<host>, on the same bridge as R1's outside interface"
+switch         = "116_L4_RANGE_S1"       # one container, one OVS bridge per segment
+container_budget = 15                    # 1 attacker + 1 switch + up to 3 routers + up to 9 hosts + the vault
+
+# The four graphs the generator draws from. Shape is drawn before addressing, so
+# two seeds at one tier differ in the network's structure and not only in its
+# digits.
+[topology.shapes]
+flat  = "attacker, R1, one segment"
+fan   = "attacker, R1, two or three segments on separate bridges"
+chain = "attacker, R1 and a segment, R1 to R2 and a segment, optionally R2 to R3 and a third"
+mixed = "R1 fans to a segment and to R2, which fans to two more"
+
+# Tier sets the shape, the sizes, and how much the learner is told at the start.
+# The last of those is what makes the tiers different exercises rather than the
+# same exercise at different lengths.
+[topology.tiers]
+# Content rises only gently across the tiers; what the learner is TOLD carries
+# nearly all of the difficulty. Tying the two together is what made easy the same
+# range every spawn, so they are now separate dials.
+easy   = "flat or fan; 1-2 segments, 6-7 hosts, 0-1 dead subnets; a 2-layer chain; par 20 min"
+normal = "fan or chain; 2-3 segments, 6-8 hosts, 1 dead subnet; a 3-layer chain; par 30 min"
+hard   = "chain or mixed; 3 segments, 7-9 hosts, 1-2 dead subnets; 3 layers, or 4 on a mixed shape; par 45 min"
+
+# Rules the drawn addressing obeys, which are what stop a learner reading the
+# answer off the shape rather than off a scan.
+# What the learner is handed at spawn, drawn per range from the tier's list. Every
+# kind on a tier's list is the same amount of work; the kind decides where that
+# work starts, so two spawns at one tier differ in the first move as well as in
+# the map. Only a kind that hands a subnet over unambiguously excludes it from the
+# scoring: `candidates` names blocks of which two do not exist, so which are real
+# is still the learner's to establish.
+[topology.openings]
+easy   = "segs | candidates | count"
+normal = "prefix | candidates | dns"
+hard   = "nothing | count"
+
+# The chain: the half of the range that ends on a win rather than on a number.
+# Every door on it opens because of a configuration a defender fixes by editing a
+# file. Nothing on it is an exploit.
+[topology.chain]
+depth        = "2 at easy, 3 at normal and hard, 4 on a hard mixed shape"
+foothold     = "a telnet host whose device family shipped a default credential, or whose shared operations account has a password on the wordlist"
+split_key    = "the vault's SSH key is in the foothold's home directory; its passphrase is on whichever service the passphrase producer was drawn onto. Neither half alone opens anything"
+pivot        = "4 layers only: an SSH host the key opens, and the one address the vault's filter permits"
+vault        = "one container on a bridge of its own behind the deepest router, unreachable except from the machine the filter names"
+last_door    = "a NOPASSWD sudo rule that reads one file"
+tokens       = "MINILABS{<milestone>-<8 hex>}, submitted with `report flag`; drawn from the seed"
+unscored     = "the vault's subnet is neither credited nor penalised, like the attacker's own segment, so following the ICMP administratively-prohibited it answers with cannot cost marks"
+
+[topology.addressing]
+segments       = "each a /24 inside the range's /16; third octets drawn distinct and never consecutive"
+gateways       = "every router interface is .1 of its segment; the one predictable address in a range, and deliberate"
+transit_links  = "/30 point-to-point veths between routers; both ends are scored router interfaces, found by traceroute"
+hosts          = "no duplicate addresses, none consecutive, nothing on .1, .100, .200 or .254, and not packed into a segment's low half"
+dead_subnets   = "routed and empty: a bridge with the router's interface and no host on it, so a sweep of it costs time and returns ICMP host unreachables"
+excluded       = "the attacker's own segment and its default gateway are neither credited nor penalised"
+
+# What a host can be running. One script per profile under image/profiles/. A
+# profile starts its service, confirms it is listening, and only then writes the
+# descriptor score.sh reads back, so a service that failed to start scores as a
+# port that is not open rather than as a finding the learner missed.
+# Six of the seventeen are UDP, which is the half of a survey a TCP-only range
+# never teaches. Three classes carry two implementations, drawn per host, so the
+# version half of the scoring is an identification task rather than a lookup.
+[topology.profiles]
+http      = "lighttpd or darkhttpd, on 80 or a drawn alternate; a third of web hosts run a second listener"
+ftp       = "vsftpd; a share that carries an unlock accepts an anonymous login and the others do not"
+telnet    = "busybox telnetd behind image/lab-login; the login prompt names a device family"
+ssh       = "OpenSSH or Dropbear; password authentication off, no weakness, identifies itself precisely"
+dns       = "BIND 9.18, authoritative for the organisation's zone, allow-transfer any; drawn at normal and above only"
+snmp      = "net-snmp on udp/161, community public; sysDescr names the machine's class and the address table is a second map"
+tftp      = "tftp-hpa on udp/69; no listing, so a file is readable only by a name learned elsewhere"
+smtp      = "an ESMTP front end on 25 that answers VRFY honestly, which enumerates accounts"
+redis     = "redis, unauthenticated; KEYS * returns the whole keyspace"
+rsync     = "rsync in daemon mode; an anonymous module listing over a backup share"
+proxy     = "tinyproxy; an open forward proxy, a route that needs no credential"
+mqtt      = "mosquitto with allow_anonymous; retained messages on every topic"
+ntp       = "chrony or openntpd on udp/123; an open UDP port with nothing behind it"
+syslog    = "a UDP sink on 514 that never replies; the open|filtered lesson, live"
+jetdirect = "a PJL listener on 9100; the model and firmware come from a query, not a banner"
+monitor   = "a line protocol on a drawn high port that nmap's database does not match"
+iperf     = "iperf3; pure noise, an open port that means nothing"
+junk      = "the noisy mutator only; six to eight listeners that accept and send nothing"
+none      = "exactly one host per range; an address, and nothing listening on it"
+
+# One drawn word that changes how the whole range behaves rather than what is on
+# it. Status names it; it gives away no address and no count.
+[topology.mutators]
+vanilla       = "no modifier"
+quiet         = "most hosts drop echo requests; they still refuse a shut port, so a TCP probe finds them"
+noisy         = "three hosts open six to eight junk listeners"
+relocated     = "every service with alternates is on one of them"
+chatty        = "an SNMP agent on most hosts"
+"locked-down" = "shut ports dropped rather than refused, except on the hosts that drop ICMP"
+legacy        = "telnet, TFTP and FTP heavy; no SSH anywhere. Never drawn on a 4-layer range"
+segmented     = "one extra dead subnet, and one dead subnet answers admin-prohibited"
+
+# Server, workstation, network device, embedded appliance. The class constrains
+# which profiles a host may draw and is readable from four weak signals: the
+# initial TTL (set at `docker run`, since /proc/sys is read-only in the
+# container), the vendor OUI on the veth MAC, the hostname and banner, and the
+# service mix. `nmap -O` answers Linux for all fifteen containers and settles
+# nothing, which is the point.
+[topology.classes]
+server      = "ttl 64,  oui 00:14:22; web, FTP, SSH, DNS, mail, redis, rsync, mqtt, proxy, iperf, snmp"
+workstation = "ttl 128, oui 3c:97:0e; http, ssh, iperf, or nothing at all"
+netdev      = "ttl 255, oui 00:1b:0d; telnet, snmp, tftp, syslog, ssh"
+appliance   = "ttl 64,  oui 00:c0:b7; telnet, http, snmp, jetdirect, monitor, ntp"
+
+# Claims that look like findings and are not. Each is drawn per range and each
+# one costs marks if it is reported without being probed.
+[topology.decoys]
+stale-dns        = "two A records in the transferred zone for addresses that hold nothing"
+snmp-ghost       = "an administratively-down interface holding an address in a block routed nowhere"
+robots-404       = "a robots.txt naming a path the server answers 404 for"
+decoy-flag       = "a correctly shaped token on the anonymous share, from an environment that was torn down"
+masked-banner    = "one web host whose Server header carries no version"
+no-time-exceeded = "one router past r1 that sends no ICMP time-exceeded, so a traceroute shows a gap"
+
+# Findings that need interaction with a service rather than a probe and a reply.
+# The tokens are a closed set and the field manual lists them.
+# Findings that need interaction with a service rather than a probe and a reply.
+# Each is also an UNLOCK: an action against one service that yields one asset the
+# chain runs on. Which producers a range carries is drawn, and the tier's
+# redundancy dial says how many beyond the one the chain needs, so at hard three
+# services name the shared account and two hold its password.
+[topology.intel]
+anon-ftp          = "the FTP service accepts an anonymous login"
+leaked-account    = "a handover note on that share names the shared account"
+leaked-passphrase = "a runbook names the passphrase on the vault's key"
+leaked-key        = "a passphrase-protected private key in the foothold's home directory"
+hidden-path       = "a path the web service does not link from its index; http-enum guesses it"
+default-cred      = "the credential the device family in the telnet banner ships with, still in place"
+weak-telnet-pass  = "the shared account, whose password is one of the fifty in the image's wordlist"
+zone-transfer     = "dig AXFR against the DNS host returns the whole zone, and the zone names every segment"
+snmp-public       = "the agent answers the community string it shipped with; sysContact can name the account"
+snmp-map          = "its address table names a block that is not one of the segments"
+smtp-vrfy         = "VRFY answers 250 for the shared account and 550 for a name that does not exist"
+tftp-file         = "a configuration backup, readable once its name is known, holding the account's password"
+redis-open        = "the keyspace answers with no authentication and holds a secret"
+rsync-module      = "an anonymous module listing, and a restore note in it"
+mqtt-open         = "retained messages on every topic, one of which carries a secret"
+open-proxy        = "the proxy connects on behalf of anyone who asks"
+
+# Which services can yield each asset the chain needs. The generator draws
+# 1 + TIER_REDUNDANCY producers per asset and forces those profiles onto hosts,
+# which is what makes the way in a graph rather than a corridor.
+[topology.assets]
+account    = "leaked-account | smtp-vrfy | snmp-public | hidden-path"
+password   = "weak-telnet-pass (always) | tftp-file | redis-open"
+filename   = "rsync-module | mqtt-open | hidden-path"
+passphrase = "leaked-passphrase | redis-open | rsync-module | mqtt-open"
+redundancy = "extra producers per asset: 0 at easy, 1 at normal, 2 at hard"
+
+# Weights, in points, before the total is scaled to 100. They live in
+# scripts/lib.sh; the field manual prints them and selftest.sh checks them.
+[scoring]
+subnet   = "+4 found, -3 claimed and not there"
+hops     = "+2 per segment at the right distance; scores only on a segment already found"
+router   = "+3 per router interface, -3 per address wrongly called one"
+host     = "+2 found, -2 claimed and not live"
+port     = "+3 open, -1 claimed open and not"
+service  = "+2 correct, on a port genuinely open"
+version  = "+3 correct, on a port that announces one"
+intel    = "+5 found, -3 claimed on a host that does not carry it"
+class    = "+2 correct, -2 wrong or claimed on an address that holds no host; router interfaces are exempt"
+foothold = "+6 the first shell"
+pivot    = "+10 a shell past a router"
+vault    = "+14 a shell on the last machine"
+flag     = "+20 the token behind the sudo rule; a wrong token costs nothing, capped at 20 submissions"
+floor    = 0
+
+# Eight actions rather than six. Reset to baseline has no meaning when the
+# topology is generated, so Regenerate replaces it; Score and Reveal are new.
+# Paths are relative to this lab directory.
+[actions]
+spawn        = "scripts/spawn.sh"        # <easy|normal|hard> [seed]
+status       = "scripts/status.sh"
+shell_in     = "scripts/shell.sh"        # [attacker|r1..r3|host1..host9]
+score        = "scripts/score.sh"
+reveal       = "scripts/reveal.sh"       # locked until score has run once
+regenerate   = "scripts/regenerate.sh"   # [seed]
+teardown     = "scripts/teardown.sh"
+open_handout = "scripts/handout.sh"

@@ -1,0 +1,6 @@
+#!/bin/sh
+# PID 1 for a router: start the FRR daemons, then hold the container open.
+# `|| true` so a daemon that reports a non-fatal warning at startup does not kill
+# the container before vtysh is reachable to say what went wrong.
+/usr/lib/frr/frrinit.sh start || true
+exec sleep infinity

@@ -1,0 +1,48 @@
+title     = "DNS tunnelling and egress control"
+layer     = "L7"
+summary   = "A compromised workstation moves a file out of a network that blocks outbound connections but permits DNS, by encoding the file's bytes into the names of queries for a zone whose authoritative server sits outside. The learner drives the channel by hand, both straight to that server and through the campus resolver, then writes the configuration that shuts it: a gateway egress rule that forces DNS through the resolver, and, because that leaves the channel running on the resolver itself, a BIND response policy that refuses the operator's zone. The graded end state is that configuration, measured by two facts at once: no bytes reach the operator's server on either path, and an ordinary name still resolves."
+images    = ["d_host_dnstun", "miniinterneteth/d_switch"]
+handout   = "handout.pdf"
+
+# Two segments meeting at the gateway, each with a switch of its own so that no
+# port of one is a port of the other. The gateway forwards and does NOT translate
+# addresses: every query crossing it still carries the inside host's own source
+# address, which is what lets a capture taken there, and the operator's server's
+# own log, say which inside host produced each query.
+#
+# The inside and outside addresses are all fixed and named here. Unlike the c2
+# lab, the destination is not something the learner discovers: the handout names
+# the operator's server and its zone, because Part 1 has the learner drive the
+# channel by hand.
+[topology]
+
+  [topology.inside]
+  subnet   = "119.0.0.0/24"
+  gateway  = "119_L7_LAB_gw = 119.0.0.1"
+  switch   = "119_L7_LAB_S1, one Open vSwitch bridge, no STP, no VLANs"
+  hosts    = [
+    "119_L7_LAB_resolver = 119.0.0.2 (recursive resolver)",
+    "119_L7_LAB_ws1 = 119.0.0.23 (compromised; the file is here)",
+    "119_L7_LAB_ws2 = 119.0.0.34 (clean; the legitimate-DNS baseline)",
+  ]
+
+  [topology.outside]
+  subnet   = "119.1.0.0/24"
+  gateway  = "119_L7_LAB_gw = 119.1.0.1"
+  switch   = "119_L7_LAB_S2, one Open vSwitch bridge, no STP, no VLANs"
+  hosts    = [
+    "119_L7_LAB_pub = 119.1.0.10 (authoritative for example.lab, plus a web banner)",
+    "119_L7_LAB_collector = 119.1.0.66 (authoritative for evil.lab; decodes and counts what arrives)",
+  ]
+
+# Lifecycle actions map one-to-one to wrapper scripts, matching miniManager's
+# item-to-script contract (arguments are passed positionally). Paths are relative
+# to this lab directory. This lab needs no `advance` action: the incident does
+# not move on its own, the learner drives both the attack and the defence.
+[actions]
+spawn        = "scripts/spawn.sh"
+status       = "scripts/status.sh"
+shell_in     = "scripts/shell.sh"
+reset        = "scripts/reset.sh"
+teardown     = "scripts/teardown.sh"
+open_handout = "scripts/handout.sh"

@@ -1,0 +1,44 @@
+title     = "Web service deployment with a private CA"
+layer     = "L7"
+summary   = "A web server delivering its site over TLS with a certificate it signed for itself, which every client refuses. Run a two-tier certificate authority, issue the server a certificate carrying the name the client asks for, deploy the chain, install the root as a trust anchor, and then break it three ways on purpose: an expired certificate, one issued for a different name, and a chain sent without its intermediate. Each failure has its own OpenSSL verify code, and curl reports all of them as the same exit status."
+images    = ["d_host_ca", "miniinterneteth/d_switch"]
+handout   = "handout.pdf"
+
+# Three hosts on one switched /24. Nothing routes and nothing filters: everything
+# this lab measures happens above the transport, so the network underneath is as
+# uninteresting as it can be made. Addresses are fixed so the handout can name
+# them and a lab script knows every address before the container exists.
+[topology]
+subnet = "111.0.0.0/24"
+
+  [topology.ca]
+  host   = "111_L7_LAB_ca = 111.0.0.10"
+  role   = "runs the two-tier certificate authority; answers SSH and nothing else"
+  holds  = [ "root key and certificate", "intermediate key and certificate", "the issued-certificate database" ]
+
+  [topology.server]
+  host     = "111_L7_LAB_server = 111.0.0.20"
+  role     = "serves the site the certificate is issued for"
+  name     = "www.minilabs.lab"
+  services = [ "tcp/443 lighttpd with mod_openssl" ]
+
+  [topology.client]
+  host = "111_L7_LAB_client = 111.0.0.30"
+  role = "fetches the site and decides whether to believe the certificate"
+  reads = [ "openssl s_client verify code", "curl exit status" ]
+
+  [topology.switch]
+  host  = "111_L7_LAB_S1"
+  role  = "one Open vSwitch bridge, no STP, no VLANs"
+  ports = [ "111-ca", "111-server", "111-client" ]
+
+# Lifecycle actions map one-to-one to wrapper scripts, matching miniManager's
+# item-to-script contract (arguments are passed positionally). Paths are relative
+# to this lab directory.
+[actions]
+spawn        = "scripts/spawn.sh"
+status       = "scripts/status.sh"
+shell_in     = "scripts/shell.sh"
+reset        = "scripts/reset.sh"
+teardown     = "scripts/teardown.sh"
+open_handout = "scripts/handout.sh"

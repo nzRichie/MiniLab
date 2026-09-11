@@ -1,0 +1,47 @@
+title     = "Bastion host and access control"
+layer     = "L7"
+summary   = "A site where every machine answers anybody who can route to it, and an operator who logs in as root with a password. Narrow it to one path: a default-deny policy on the edge router, a jump host the operator reaches first, one key per account, and an authorized_keys entry that names the address a key may arrive from and the single command it may run. What each of those three stops, and what it leaves to the next one, is the lab."
+images    = ["d_host_bastion", "miniinterneteth/d_switch"]
+handout   = "handout.pdf"
+
+# Three segments meeting at one edge router. Two are point-to-point and need no
+# switch. The third is switched, because app and db have to be able to reach each
+# other without their packets crossing the router: no rule written on the edge
+# can affect that path, and Part 5 is about what does. Addresses are fixed so the
+# handout can name them and a lab script knows every address before the container
+# exists.
+[topology]
+
+  [topology.external]
+  subnet = "114.0.0.0/24"
+  hosts  = [ "114_L7_LAB_workstation = 114.0.0.10" ]
+  router = "114_L7_LAB_edge = 114.0.0.1"
+  role   = "the operator's machine, outside the site; the vantage every sweep is run from"
+
+  [topology.dmz]
+  subnet   = "114.1.0.0/24"
+  hosts    = [ "114_L7_LAB_bastion = 114.1.0.2" ]
+  router   = "114_L7_LAB_edge = 114.1.0.1"
+  role     = "the jump host, alone on a segment of its own"
+  services = [ "tcp/22 sshd, password authentication on, forwarding unrestricted", "account: jump" ]
+
+  [topology.inner]
+  subnet   = "114.2.0.0/24"
+  hosts    = [ "114_L7_LAB_app = 114.2.0.20", "114_L7_LAB_db = 114.2.0.30" ]
+  router   = "114_L7_LAB_edge = 114.2.0.1"
+  switch   = "114_L7_LAB_S1, one Open vSwitch bridge, no STP, no VLANs"
+  services = [
+    "app: tcp/22 sshd and tcp/80 lighttpd; account: appops",
+    "db:  tcp/22 sshd; accounts: dbops, and dbreport for the reporting job",
+  ]
+
+# Lifecycle actions map one-to-one to wrapper scripts, matching miniManager's
+# item-to-script contract (arguments are passed positionally). Paths are relative
+# to this lab directory.
+[actions]
+spawn        = "scripts/spawn.sh"
+status       = "scripts/status.sh"
+shell_in     = "scripts/shell.sh"
+reset        = "scripts/reset.sh"
+teardown     = "scripts/teardown.sh"
+open_handout = "scripts/handout.sh"

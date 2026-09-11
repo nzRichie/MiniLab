@@ -1,0 +1,64 @@
+#!/usr/bin/env python3
+"""Serve one fixed line of text on port 80 of ONE address.
+
+    banner-server <bind-ip> <text>
+
+Every host in the lab runs this with its own name, so a curl that crosses the
+network reads back which host actually received the request. The attacker in
+Part 4 runs a second copy bound to the address it has stolen, which is what makes
+the theft visible in the data plane rather than only in a routing table.
+
+Binds a single address rather than 0.0.0.0 so that one host can serve two
+identities on two addresses at once.
+"""
+import socket
+import sys
+from http.server import BaseHTTPRequestHandler, HTTPServer
+from socketserver import TCPServer
+
+if len(sys.argv) != 3:
+    sys.exit("usage: banner-server <bind-ip> <text>")
+
+BIND, TEXT = sys.argv[1], sys.argv[2].encode()
+
+
+class Banner(BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200)
+        self.send_header("Content-Type", "text/plain")
+        self.send_header("Content-Length", str(len(TEXT)))
+        self.end_headers()
+        self.wfile.write(TEXT)
+
+    def log_message(self, *_):
+        pass          # the container log is not the oracle; curl is
+
+
+class Server(HTTPServer):
+    """HTTPServer that does not look its own address up in the DNS.
+
+    The stock server_bind() calls socket.getfqdn() on the bind address to fill in
+    server_name. These containers have no resolver, so that lookup blocks for as
+    long as the stub takes to give up -- and it runs AFTER the socket is bound and
+    listening but BEFORE serve_forever() starts accepting. The result is a port
+    that netstat reports as LISTEN and that answers no request, which reads as a
+    server that started and is broken rather than one that has not finished
+    starting. server_name is only ever used to fill in a CGI variable this server
+    does not set, so the address itself does for it.
+    """
+
+    def server_bind(self):
+        TCPServer.server_bind(self)
+        self.server_name = BIND
+        self.server_port = self.server_address[1]
+
+
+# Bind before anything else can, and fail loudly rather than silently retrying:
+# a second copy on the same address means an earlier one was never stopped, and
+# that is a fault in whatever started this, not something to paper over.
+try:
+    server = Server((BIND, 80), Banner)
+except OSError as exc:
+    sys.exit(f"banner-server: cannot bind {BIND}:80: {exc}")
+
+server.serve_forever()

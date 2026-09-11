@@ -22,14 +22,6 @@ file on it, including other accounts' work. A rootless daemon runs as the studen
 and maps container root to their own user id, so a lab cannot reach outside their
 own files.
 
-For both versions run:
-
-```bash
-sudo apt install -y docker openvswitch-switch
-```
-
-For Rootless run:
-
 ```bash
 # Rootless (Ubuntu). docker-ce-rootless-extras comes from Docker's own apt
 # repository, and carries the AppArmor profile Ubuntu 24.04 and later need.
@@ -75,8 +67,9 @@ Pick a lab to open its actions:
   which takes a few minutes; every spawn after that is seconds.
 - **Status** prints the lab's addressing and its success oracle, so you can read
   the before/after without shelling in.
-- **Shell command for a node** asks which node and prints the `docker exec -it`
-  line to paste into your own terminal.
+- **Shell command for a node** lists every node in the lab with the
+  `docker exec -it` line that opens a shell on it, to paste into your own
+  terminal. It stays on screen until you press Enter.
 - **Reset to baseline** undoes the attack and your defences without tearing down.
 - **Teardown** removes the lab. Run it when you finish.
 - **Open handout** opens that lab's handout PDF.

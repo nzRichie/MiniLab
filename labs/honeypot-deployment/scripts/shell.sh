@@ -1,45 +1,66 @@
 #!/usr/bin/env bash
-# Open a shell on one of the lab's nodes, or print the command that does.
+# Print the `docker exec -it` line for every node in the lab, or open a shell
+# on one of them.
 #
-# The TUI streams job output non-interactively and cannot host a PTY, so when
-# there is no TTY this prints the `docker exec -it` line for the learner to run
-# in their own terminal instead of trying to attach.
+# The TUI streams a script's output non-interactively and cannot host a PTY, so
+# with no terminal attached this prints one line per node and the learner pastes
+# the one they want into their own terminal. Given a node name as $1 from a real
+# terminal it opens that shell instead.
 set -uo pipefail
 source "$( dirname "${BASH_SOURCE[0]}" )/lib.sh"
 
 ROLES="attacker prod honeypot admin router"
 
-role="${1:-}"
-if [ -z "$role" ]; then
-    echo "usage: $( basename "$0" ) <node>" >&2
-    echo "nodes: $ROLES" >&2
-    exit 1
-fi
+running="$( docker ps --format '{{.Names}}' 2>/dev/null )"
 
-case " $ROLES " in
-    *" $role "*) ;;
-    *) echo "unknown node '$role'; expected one of: $ROLES" >&2; exit 1 ;;
-esac
+# Marks the nodes whose container is not up, so a learner who has not spawned
+# the lab (or has torn it down) reads why the line they are about to paste fails.
+state_of() {   # <container>
+    grep -qxF "$1" <<< "$running" || echo "   (not running)"
+}
 
-ctn="$( ctn_of "$role" )"
-
-if ! docker ps --format '{{.Names}}' | grep -qx "$ctn"; then
-    echo "$ctn is not running; spawn the lab first" >&2
-    exit 1
-fi
-
-if [ -t 0 ] && [ -t 1 ]; then
-    exec docker exec -it "$ctn" bash
-fi
-
-echo "Run this in your own terminal:"
-echo
-echo "    docker exec -it $ctn bash"
-echo
-if [ "$role" = "honeypot" ]; then
-    echo "Cowrie runs as the unprivileged 'cowrie' account, out of $COWRIE_HOME."
-    echo "To work as that account instead:"
+# Cowrie runs as its own unprivileged account, so a shell on the honeypot that
+# is meant to touch Cowrie's files needs -u and -w as well.
+cowrie_line() {
+    echo "  Cowrie runs as the unprivileged '$COWRIE_USER' account, out of $COWRIE_HOME."
+    echo "  To work as that account instead:"
     echo
-    echo "    docker exec -it -u $COWRIE_USER -w $COWRIE_HOME $ctn bash"
-    echo
+    echo "      docker exec -it -u $COWRIE_USER -w $COWRIE_HOME $( ctn_of honeypot ) bash"
+}
+
+if [ $# -ge 1 ]; then
+    role="$1"
+    case " $ROLES " in
+        *" $role "*) ;;
+        *) echo "unknown node '$role'; expected one of: $ROLES" >&2; exit 1 ;;
+    esac
+    ctn="$( ctn_of "$role" )"
+    if [ -t 0 ] && [ -t 1 ]; then
+        exec docker exec -it "$ctn" bash
+    fi
+    echo "Open a terminal and run:"
+    echo "    docker exec -it $ctn bash"
+    if [ "$role" = "honeypot" ]; then
+        echo
+        cowrie_line
+    fi
+    exit 0
 fi
+
+# The container names share a prefix and differ only in the node name, so the
+# widest of them is what the commands line up on.
+ctn_width=0
+for role in $ROLES; do
+    ctn="$( ctn_of "$role" )"
+    if [ ${#ctn} -gt "$ctn_width" ]; then ctn_width=${#ctn}; fi
+done
+
+echo "Open a terminal and run the line for the node you want."
+echo
+for role in $ROLES; do
+    ctn="$( ctn_of "$role" )"
+    printf '  %-10s docker exec -it %-*s bash%s\n' \
+        "$role" "$ctn_width" "$ctn" "$( state_of "$ctn" )"
+done
+echo
+cowrie_line

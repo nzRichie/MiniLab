@@ -1,0 +1,88 @@
+#!/usr/bin/env python3
+"""slow-link - a UDP relay that holds every reply back by a fixed delay.
+
+The authoritative server in this lab runs on the loopback address of its own
+container; this sits on the container's LAN address in front of it and passes
+each datagram through, delaying the reply. What a client sees is one name server
+at <listen>:<port> whose answers take <delay> milliseconds longer than the
+network itself does.
+
+It exists because the race the lab teaches is only as wide as the time between
+the resolver sending a query and the real answer arriving, and between two
+containers on one laptop that time is a fraction of a millisecond. The delay
+reproduces the distance to an authoritative server on another continent, or one
+slow enough under load to take that long. It is stated in the handout and the
+learner measures it with dig's own Query time line.
+
+  slow-link --listen 107.2.0.10 --port 53 --upstream 127.0.0.1 --upstream-port 5353 --delay-ms 400
+
+Nothing is defaulted. Replies are delayed with a timer rather than a sleep, so
+several queries can be in flight at once and none of them blocks another.
+"""
+import argparse
+import selectors
+import socket
+import sys
+import time
+
+BUFSIZE = 4096   # larger than any answer this lab's zone produces, signed or not
+
+
+def main():
+    p = argparse.ArgumentParser(add_help=True, description=__doc__.splitlines()[0])
+    p.add_argument("--listen", required=True, help="address to accept queries on")
+    p.add_argument("--port", type=int, required=True, help="port to accept queries on")
+    p.add_argument("--upstream", required=True, help="address of the real name server")
+    p.add_argument("--upstream-port", type=int, required=True, help="its port")
+    p.add_argument("--delay-ms", type=int, required=True,
+                   help="how long to hold each reply before passing it back")
+    args = p.parse_args()
+
+    front = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    front.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    try:
+        front.bind((args.listen, args.port))
+    except OSError as exc:
+        sys.exit(f"slow-link: cannot bind {args.listen}:{args.port}: {exc}")
+
+    upstream_addr = (args.upstream, args.upstream_port)
+    delay = args.delay_ms / 1000.0
+
+    sel = selectors.DefaultSelector()
+    sel.register(front, selectors.EVENT_READ, "front")
+
+    # One upstream socket per query in flight, so two queries arriving together
+    # cannot have their replies confused with one another.
+    pending = {}        # upstream socket -> the client address that asked
+    due = []            # (send_at, client address, reply bytes), kept in time order
+
+    print(f"[*] {args.listen}:{args.port} -> {args.upstream}:{args.upstream_port}, "
+          f"replies delayed by {args.delay_ms} ms", flush=True)
+
+    while True:
+        now = time.monotonic()
+        timeout = max(0.0, due[0][0] - now) if due else 1.0
+        for key, _ in sel.select(timeout=timeout):
+            if key.data == "front":
+                query, client = front.recvfrom(BUFSIZE)
+                out = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+                out.sendto(query, upstream_addr)
+                pending[out] = client
+                sel.register(out, selectors.EVENT_READ, "upstream")
+            else:
+                out = key.fileobj
+                reply, _ = out.recvfrom(BUFSIZE)
+                client = pending.pop(out, None)
+                sel.unregister(out)
+                out.close()
+                if client is not None:
+                    due.append((time.monotonic() + delay, client, reply))
+
+        now = time.monotonic()
+        while due and due[0][0] <= now:
+            _, client, reply = due.pop(0)
+            front.sendto(reply, client)
+
+
+if __name__ == "__main__":
+    main()

@@ -1,0 +1,61 @@
+title     = "Firewalling and intrusion detection with Suricata"
+layer     = "L4"
+summary   = "A server with three listeners on a site network, and an outside machine that scans it, finds the telnet service and logs in. Write the server's own packet filter first: log the connection attempts, drop them by source, then watch a rule written against one outside prefix miss an attacker who already holds an address on another. Then write the same policy as Suricata signatures, first reading copies of packets off the interface, where every attempt is recorded and every attempt still succeeds, and then inline on a netfilter queue, where the signature that matches is the thing that drops the packet. The end state is measured three ways at once: neither attacker address reaches tcp/23, the workstation on the inside still does, and the public web site still answers from outside."
+images    = ["d_host_ids", "miniinterneteth/d_switch"]
+handout   = "handout.pdf"
+
+# Two segments meeting at a router, each with a switch of its own so that no
+# port of one is a port of the other. The router forwards and does NOT translate
+# addresses: every packet reaching the server still carries the source address
+# of the machine that sent it, which is what makes a source-address match on the
+# server mean anything.
+#
+# The outside segment carries two prefixes. Both the router's outside interface
+# and the attacker's machine hold an address in each, which is what makes a
+# filter rule written against one outside prefix visibly incomplete.
+[topology]
+inside_subnet       = "124.0.0.0/24"
+outside_subnet      = "124.1.0.0/24"
+outside_alt_subnet  = "124.9.0.0/24"
+
+  [topology.server]
+  host     = "124_L4_LAB_server = 124.0.0.10"
+  role     = "the machine under attack, and the only one the learner configures"
+  services = [
+    "tcp/22 sshd, from the base image's own host keys",
+    "tcp/23 busybox telnetd running /bin/login; the account svcops has password labpass",
+    "tcp/80 lighttpd serving one page, the site that has to stay public",
+  ]
+  runs     = [ "iptables, empty filter table at spawn", "suricata 7.0.2, not running at spawn" ]
+
+  [topology.client]
+  host = "124_L4_LAB_client = 124.0.0.20"
+  role = "the internal workstation; its telnet access is what every rule the learner writes has to leave alone"
+
+  [topology.router]
+  host = "124_L4_LAB_router: inside = 124.0.0.1, outside = 124.1.0.1 and 124.9.0.1"
+  role = "forwards between the two segments, translates nothing, filters nothing"
+
+  [topology.attacker]
+  host = "124_L4_LAB_attacker = 124.1.0.66 and 124.9.0.66"
+  role = "the outside machine every probe is sent from; it carries an address on each outside prefix"
+  runs = [ "nmap and nping", "the telnet client" ]
+
+  [topology.customer]
+  host = "124_L4_LAB_customer = 124.1.0.77"
+  role = "an outside reader of the public web site; it is how a rule aimed at telnet is shown to have stayed aimed at telnet"
+
+  [topology.switches]
+  hosts = [ "124_L4_LAB_S1, the inside segment", "124_L4_LAB_S2, the outside segment" ]
+  role  = "one Open vSwitch bridge each, no STP, no VLANs"
+
+# Lifecycle actions map one-to-one to wrapper scripts, matching miniManager's
+# item-to-script contract (arguments are passed positionally). Paths are relative
+# to this lab directory.
+[actions]
+spawn        = "scripts/spawn.sh"
+status       = "scripts/status.sh"
+shell_in     = "scripts/shell.sh"
+reset        = "scripts/reset.sh"
+teardown     = "scripts/teardown.sh"
+open_handout = "scripts/handout.sh"

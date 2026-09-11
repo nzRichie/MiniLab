@@ -1,0 +1,11 @@
+Brindle Logistics -- returns and claims policy
+
+1. A claim for a damaged or missing consignment must reach the depot that
+   raised the delivery note within 14 days of the delivery date printed on it.
+
+2. A consignment refused at the door returns to its origin depot at the
+   sender's cost. The return leg is charged at the same tariff band as the
+   outbound leg.
+
+3. Pallet exchange is settled at the point of delivery. A pallet not exchanged
+   at the door is invoiced at the rate in the current tariff.

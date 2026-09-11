@@ -1,0 +1,28 @@
+#!/bin/sh
+# The nightly report job, on the reports host.
+#
+# It is the second thing that connects to the portal's database, and it is why
+# the account the traversal discloses cannot simply be bound to the web tier's
+# address and left there. It reads its credentials from a defaults file the
+# same way mariadb-dump and every other packaged job on this host would, and it
+# reads two tables the portal itself never touches.
+#
+# Exit 0 means the job ran and got its counts. Exit 1 means it could not, and
+# the reason the client printed is on standard error.
+set -eu
+
+CNF="/etc/minilabs/report.cnf"
+
+[ -r "$CNF" ] || { echo "nightly-report: cannot read $CNF" >&2; exit 1; }
+
+out="$( mariadb --defaults-extra-file="$CNF" -N -B \
+        -e "SELECT COUNT(*) FROM portal.customer; SELECT COUNT(*) FROM portal.shipment;" 2>&1 )" || {
+    echo "nightly-report: the database refused the job's connection" >&2
+    echo "$out" >&2
+    exit 1
+}
+
+customers="$( echo "$out" | sed -n 1p )"
+shipments="$( echo "$out" | sed -n 2p )"
+
+echo "nightly-report: ${customers} customers, ${shipments} shipments"

@@ -1,0 +1,82 @@
+title     = "Authoritative DNS, zone authoring and delegation"
+layer     = "L7"
+summary   = "A domain the rest of the network has already been told to ask you about, and three servers that hold nothing. Write the zone file: an SOA whose five timers you have to defend, the NS, A, AAAA, MX and CNAME records, then a second server that keeps a copy in step through NOTIFY and a serial comparison, then a subdomain delegated to a department's own server with the glue record that makes the referral followable, then the reverse zone for the lab's /24. Four ways a zone that reads correctly in an editor still replies wrongly on the wire are each produced on purpose and measured."
+images    = ["d_host_zonedns", "miniinterneteth/d_switch"]
+handout   = "handout.pdf"
+
+# One switched segment and no router: nothing in this lab crosses a subnet
+# boundary, so every machine can reach every other from the moment spawn
+# finishes and anything that fails afterwards fails in the DNS. Addresses are
+# fixed so the handout can name them and a lab script knows every address before
+# the container exists. Every machine also holds fd00:115::<last octet>, which is
+# what makes the AAAA record the learner writes point at an address that replies.
+[topology]
+subnet       = "115.0.0.0/24"
+subnet6      = "fd00:115::/64"
+switch       = "115_L7_LAB_S1, one Open vSwitch bridge, no STP, no VLANs"
+zone         = "uni.lab"
+child_zone   = "cs.uni.lab"
+reverse_zone = "0.0.115.in-addr.arpa"
+
+  [topology.root]
+  ip   = "115.0.0.2"
+  ctn  = "115_L7_LAB_root"
+  role = "given whole, and never edited by the learner. Authoritative for three zones: the root, which delegates lab. and arpa.; lab., which delegates uni.lab to ns1 and ns2 with their glue; and arpa., which delegates the reverse /24 to ns1 without glue, because that name is reachable down a different branch"
+
+  [topology.primary]
+  ip   = "115.0.0.10"
+  ctn  = "115_L7_LAB_primary"
+  role = "ns1.uni.lab. Arrives with named running and no zone. Parts 1, 3 and 4 are written here: the forward zone, the delegation of cs.uni.lab, and the reverse zone. Also serves www.uni.lab's page on port 80"
+
+  [topology.secondary]
+  ip   = "115.0.0.20"
+  ctn  = "115_L7_LAB_secondary"
+  role = "ns2.uni.lab, and the address mail.uni.lab's MX points at. Arrives with named running and no zone; Part 2 makes it a secondary that transfers the forward zone"
+
+  [topology.sub]
+  ip   = "115.0.0.30"
+  ctn  = "115_L7_LAB_sub"
+  role = "ns1.cs.uni.lab, the child zone's only server. Arrives with named running and no zone; Part 3 is written here as well as on the primary. Serves www.cs.uni.lab's page on port 80"
+
+  [topology.client]
+  ip   = "115.0.0.40"
+  ctn  = "115_L7_LAB_client"
+  role = "given whole. Runs named as a recursive resolver whose entire configuration is a hints file naming the root server, so every end-to-end check is answered by iteration from the root. Every dig, curl and ping6 in the lab is sent from here"
+
+# What the learner writes, and where. named.conf is given on all three servers
+# and holds only an options block, a controls block and the include below;
+# zones.conf is what the include names and it starts empty.
+[learner_files]
+zones_conf   = "/etc/bind/zones.conf, on the primary, the secondary and the sub"
+forward_zone = "/var/bind/uni.lab.zone, on the primary"
+child_zone   = "/var/bind/cs.uni.lab.zone, on the sub"
+reverse_zone = "/var/bind/0.0.115.in-addr.arpa.zone, on the primary"
+transferred  = "/var/bind/secondary/uni.lab.zone, written by named on the secondary, not by hand"
+log          = "/var/log/named.log, on every server"
+
+# The five SOA numbers the handout tells the learner to use. Three questions are
+# arithmetic on exactly these, and the answer key quotes them, so a change here
+# is a change to two documents.
+[soa]
+refresh = 3600        # how long a secondary waits before re-checking the serial
+retry   = 600         # how long after a check that failed
+expire  = 1209600     # fourteen days, after which the secondary discards its copy
+minimum = 300         # the lifetime of a negative answer (RFC 2308)
+ttl     = 3600        # the zone's $TTL, for records that carry none of their own
+
+# The one check in the lab that is not a DNS answer: a name resolved through the
+# whole chain, connected to, and the machine at the other end saying which it is.
+[web_markers]
+parent = "UNI-MAIN-4B71E2"   # served by the primary,   reached as www.uni.lab
+child  = "CS-DEPT-9F03A6"    # served by the sub,       reached as www.cs.uni.lab
+
+# Lifecycle actions map one-to-one to wrapper scripts, matching miniManager's
+# item-to-script contract (arguments are passed positionally). Paths are relative
+# to this lab directory.
+[actions]
+spawn        = "scripts/spawn.sh"
+status       = "scripts/status.sh"
+shell_in     = "scripts/shell.sh"
+reset        = "scripts/reset.sh"
+teardown     = "scripts/teardown.sh"
+open_handout = "scripts/handout.sh"

@@ -1,0 +1,161 @@
+#!/bin/sh
+# `report` -- how a learner records a finding on this range.
+#
+# Line-oriented text, not JSON: a line is appendable from a shell in one command
+# and parseable in score.sh without a JSON tool.
+#
+#   report net    116.19.0.0/24 hops 2   # a segment, and its distance from you
+#   report router 116.7.0.1               # a router interface
+#   report host   116.7.0.23
+#   report port   116.7.0.23 tcp 80 http lighttpd 1.4.85
+#   report intel  116.7.0.87 anon-ftp
+#   report class  116.7.0.23 server
+#   report list                           # numbered
+#   report del 4
+#   report clear
+#
+# It validates only the SHAPE of a line. It does not check whether the address is
+# live, whether the port is open, or whether the token names a real finding, and
+# it must not: no message that hints, no exit code that differs for a wrong
+# answer, and no completion of addresses. Everything it knows is what you typed.
+#
+# Grading happens in the Score action, which copies this file out of the
+# container and compares it against the range's live containers.
+set -u
+
+FINDINGS=/root/findings.txt
+touch "$FINDINGS" 2>/dev/null || true
+
+usage() {
+    cat <<'USAGE'
+usage:
+  report net    <cidr> hops <n>          a segment you found, and its distance in routers
+  report router <ip>                     an address you believe is a router interface
+  report host    <ip>                    an address you believe holds a host
+  report port    <ip> <tcp|udp> <port> [service] [version...]
+  report intel   <ip> <token>            one of the intel tokens; the field manual
+                                         prints the list. anon-ftp, leaked-account,
+                                         leaked-passphrase, leaked-key, hidden-path,
+                                         default-cred, weak-telnet-pass, zone-transfer,
+                                         snmp-public, snmp-map, smtp-vrfy, tftp-file,
+                                         redis-open, rsync-module, mqtt-open, open-proxy
+  report class   <ip> <class>            server | workstation | netdev | appliance
+  report flag    <token>                 a MINILABS{...} token off a machine you reached
+  report list                            show what you have recorded, numbered
+  report del <n>                         remove line n
+  report clear                           remove everything
+USAGE
+}
+
+is_ip() {
+    echo "$1" | grep -Eq '^([0-9]{1,3}\.){3}[0-9]{1,3}$'
+}
+is_cidr() {
+    echo "$1" | grep -Eq '^([0-9]{1,3}\.){3}[0-9]{1,3}/[0-9]{1,2}$'
+}
+is_num() {
+    echo "$1" | grep -Eq '^[0-9]+$'
+}
+
+die() { echo "report: $*" >&2; exit 2; }
+
+[ $# -ge 1 ] || { usage; exit 2; }
+
+kind="$1"; shift
+
+case "$kind" in
+    net)
+        [ $# -eq 3 ] || die "usage: report net <cidr> hops <n>"
+        is_cidr "$1" || die "'$1' is not a CIDR block, e.g. 10.4.0.0/24"
+        [ "$2" = hops ] || die "usage: report net <cidr> hops <n>"
+        is_num "$3" || die "'$3' is not a number of hops"
+        echo "net $1 hops $3" >> "$FINDINGS"
+        ;;
+    router|host)
+        [ $# -eq 1 ] || die "usage: report $kind <ip>"
+        is_ip "$1" || die "'$1' is not an address"
+        echo "$kind $1" >> "$FINDINGS"
+        ;;
+    port)
+        [ $# -ge 3 ] || die "usage: report port <ip> <tcp|udp> <port> [service] [version...]"
+        is_ip "$1" || die "'$1' is not an address"
+        case "$2" in tcp|udp) ;; *) die "'$2' is not tcp or udp" ;; esac
+        is_num "$3" || die "'$3' is not a port number"
+        echo "port $*" >> "$FINDINGS"
+        ;;
+    intel)
+        [ $# -eq 2 ] || die "usage: report intel <ip> <token>"
+        is_ip "$1" || die "'$1' is not an address"
+        # The token vocabulary is closed, and the field manual lists it. A typo
+        # is rejected here rather than silently scoring nothing, because losing a
+        # finding to a misspelling is not a thing this range is testing.
+        case "$2" in
+            anon-ftp|leaked-account|leaked-passphrase|leaked-key|hidden-path) ;;
+            default-cred|weak-telnet-pass|zone-transfer) ;;
+            snmp-public|snmp-map|smtp-vrfy|tftp-file) ;;
+            redis-open|rsync-module|mqtt-open|open-proxy) ;;
+            *) die "'$2' is not one of the intel tokens; see the field manual" ;;
+        esac
+        echo "intel $1 $2" >> "$FINDINGS"
+        ;;
+    class)
+        [ $# -eq 2 ] || die "usage: report class <ip> <class>"
+        is_ip "$1" || die "'$1' is not an address"
+        # The vocabulary is closed here for the same reason the intel one is:
+        # losing a finding to a misspelling is not a thing this range is testing.
+        # Whether the class is the RIGHT one is not checked, here or anywhere
+        # else until Score runs.
+        case "$2" in
+            server|workstation|netdev|appliance) ;;
+            *) die "'$2' is not a class; they are server, workstation, netdev and appliance" ;;
+        esac
+        echo "class $1 $2" >> "$FINDINGS"
+        ;;
+    flag)
+        [ $# -eq 1 ] || die "usage: report flag <token>"
+        # The shape only, exactly like every other kind: this checks that what
+        # you typed looks like a token, never that it is one. A wrong token
+        # scores nothing and costs nothing, so there is no reason for the output
+        # or the exit status to differ, and they do not.
+        echo "$1" | grep -Eq '^MINILABS\{[a-z]+-[0-9a-f]+\}$' \
+            || die "'$1' is not shaped like a token; they look like MINILABS{foothold-1a2b3c4d}"
+        # Guessing an 8-hex-digit token is not something anybody does by hand, so
+        # the cap is not there to stop guessing. It is there so nobody scripts
+        # it, and it is far enough above the handful of lines a learner records
+        # while working out the syntax to never be reached by playing.
+        # `grep -c` prints 0 AND exits 1 when it matches nothing, so an
+        # `|| echo 0` here appends a second zero and the count becomes "0\n0",
+        # which the comparison below rejects as a bad number. The first flag any
+        # learner submitted hit that, which is a good argument for the fallback
+        # going on its own line where it is visible.
+        n=$( grep -c '^flag ' "$FINDINGS" 2>/dev/null ) || n=0
+        [ -n "$n" ] || n=0
+        [ "$n" -lt 20 ] || die "you have already submitted 20 tokens; that is the cap"
+        echo "flag $1" >> "$FINDINGS"
+        ;;
+    list)
+        [ -s "$FINDINGS" ] || { echo "nothing recorded yet"; exit 0; }
+        cat -n "$FINDINGS"
+        exit 0
+        ;;
+    del)
+        [ $# -eq 1 ] && is_num "$1" || die "usage: report del <n>"
+        [ -s "$FINDINGS" ] || die "nothing recorded yet"
+        total=$( wc -l < "$FINDINGS" )
+        [ "$1" -ge 1 ] && [ "$1" -le "$total" ] || die "no line $1; you have $total"
+        sed -i "$1d" "$FINDINGS"
+        echo "removed line $1"
+        exit 0
+        ;;
+    clear)
+        : > "$FINDINGS"
+        echo "cleared"
+        exit 0
+        ;;
+    -h|--help|help) usage; exit 0 ;;
+    *) die "'$kind' is not a kind of finding; try: report --help" ;;
+esac
+
+# Deliberately the same acknowledgement for every recorded finding, right or
+# wrong. The count is the only thing that changes.
+echo "recorded ($( wc -l < "$FINDINGS" | tr -d ' ') so far)"

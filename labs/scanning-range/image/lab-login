@@ -1,0 +1,69 @@
+#!/bin/sh
+# One-shot login front-end for the lab's telnet service, run by busybox telnetd
+# instead of /bin/login.
+#
+# Why this exists. busybox `login` offers three attempts on a single connection.
+# hydra's telnet module expects one attempt per connection: after the first wrong
+# password it reads the re-prompt as the response to the next credential pair and
+# stays one reply behind for the rest of the run, so a brute force against stock
+# busybox login reports "0 valid password found" even when the password is in the
+# list. Verified: with the correct password first in the list hydra finds it, and
+# with a single wrong password ahead of it hydra misses it.
+#
+# Closing the session after one failed attempt is also what the device this host
+# stands in for really does. Console and telnet front-ends on network equipment
+# drop the connection on a bad login rather than re-prompting indefinitely, which
+# is why an attacker reconnects per guess.
+#
+# Authentication is against the real /etc/shadow entry, so the password is not
+# stored in plaintext anywhere on this host. The account is only weak because the
+# password is a common one, which is the whole point of Part 3.
+
+TERM="${TERM:-vt100}"; export TERM
+
+# Read one non-empty line into FIELD, tolerating either line ending.
+#
+# A telnet client ends a line with CR LF; hydra's telnet module sends a bare CR.
+# The pty's default input mapping turns CR into a newline, so the client's CR LF
+# arrives as TWO lines, the second empty, while hydra's bare CR arrives as one.
+# Turning that mapping off (stty igncr) fixes the client and breaks hydra, whose
+# line then never terminates at all. Skipping empty lines instead accepts both:
+# the client's stray blank line is discarded here rather than being read as the
+# password, which is what left the password empty and failed every login.
+FIELD=""
+read_field() {
+    while IFS= read -r FIELD; do
+        FIELD="$( printf '%s' "$FIELD" | tr -d '\r' )"
+        [ -n "$FIELD" ] && return 0
+    done
+    return 1
+}
+
+printf '\r\n%s login: ' "$( hostname )"
+read_field || exit 1
+user="$FIELD"
+
+stty -echo 2>/dev/null
+printf 'Password: '
+read_field || { stty echo 2>/dev/null; exit 1; }
+pass="$FIELD"
+stty echo 2>/dev/null
+printf '\r\n'
+
+# The stored hash, e.g. $6$<salt>$<hash> for SHA-512. Re-hash what was typed with
+# the same method and salt and compare; equal means the password is correct.
+entry="$( getent shadow "$user" 2>/dev/null | cut -d: -f2 )"
+case "$entry" in
+    '$6$'*)
+        salt="$( printf '%s' "$entry" | cut -d'$' -f3 )"
+        if [ "$( cryptpw -m sha512 -S "$salt" "$pass" )" = "$entry" ]; then
+            exec su - "$user"
+        fi
+        ;;
+esac
+
+# One attempt, then the connection closes. No lockout, no delay, no record: an
+# attacker simply reconnects, which is what makes the guessing rate in Part 3 a
+# function of the network and nothing else.
+printf 'Login incorrect\r\n'
+exit 1

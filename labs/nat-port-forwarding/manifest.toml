@@ -1,0 +1,56 @@
+title     = "NAT and port forwarding at the edge"
+layer     = "L3"
+summary   = "A site on a private prefix behind one edge router that translates nothing: traffic leaves, and no reply comes back. Build the three translations that fix it. Source NAT so the far side has an address it can answer, destination NAT so one service inside the site is reachable through the router's own address, and a second source NAT so a private client can reach that published address as well. The connection-tracking table on the router is read at every step, because a NAT rule is an entry in that table and not a rewrite performed per packet."
+images    = ["d_host_nat", "miniinterneteth/d_switch"]
+handout   = "handout.pdf"
+
+# Two segments, one router. The private segment is switched because three
+# machines share it; the outside link carries two machines and has no switch on
+# it. Addresses are fixed so the handout can name them and a lab script knows
+# every address before the container exists.
+#
+# The inside prefix comes from RFC 1918 rather than from this AS's own
+# 112.0.0.0/8 block, because the lab rests on the far side holding no route back
+# to it.
+[topology]
+inside_subnet  = "192.168.10.0/24"
+outside_subnet = "112.0.0.0/24"
+
+  [topology.router]
+  host  = "112_L3_LAB_router: inside = 192.168.10.1, outside = 112.0.0.1"
+  role  = "forwards between both segments; the only device the learner configures"
+  runs  = [ "ip_forward=1", "no nat table at spawn", "nftables and conntrack" ]
+
+  [topology.inside-1]
+  host = "112_L3_LAB_inside-1 = 192.168.10.11"
+  role = "a private client; every fetch the lab grades starts here or on outside"
+
+  [topology.inside-2]
+  host = "112_L3_LAB_inside-2 = 192.168.10.12"
+  role = "a second private client, so two flows can be made to collide on one source port"
+
+  [topology.webserver]
+  host     = "112_L3_LAB_webserver = 192.168.10.20"
+  role     = "the private service Part 4 publishes through the router's outside address"
+  services = [ "tcp/80 lighttpd", "/whoami.cgi returns the source address it saw" ]
+
+  [topology.outside]
+  host     = "112_L3_LAB_outside = 112.0.0.10"
+  role     = "the host beyond the edge; holds no route into the private prefix, on purpose"
+  services = [ "tcp/80 lighttpd", "/whoami.cgi returns the source address it saw" ]
+
+  [topology.switch]
+  host  = "112_L3_LAB_S1"
+  role  = "one Open vSwitch bridge on the private segment, no STP, no VLANs"
+  ports = [ "112-inside-1", "112-inside-2", "112-webserver", "112-router" ]
+
+# Lifecycle actions map one-to-one to wrapper scripts, matching miniManager's
+# item-to-script contract (arguments are passed positionally). Paths are relative
+# to this lab directory.
+[actions]
+spawn        = "scripts/spawn.sh"
+status       = "scripts/status.sh"
+shell_in     = "scripts/shell.sh"
+reset        = "scripts/reset.sh"
+teardown     = "scripts/teardown.sh"
+open_handout = "scripts/handout.sh"

@@ -9,502 +9,905 @@
 
 
 [[items]]
-title = "ARP hijacking"
+title = "Network configuration"
 
   [[items.items]]
-  title = "Spawn"
-  script = "labs/arp-hijacking/scripts/spawn.sh"
+  title = "Addressing and static routing"
+
+    [[items.items.items]]
+    title = "Spawn"
+    script = "labs/addressing-and-routing/scripts/spawn.sh"
+
+    [[items.items.items]]
+    title = "Status"
+    script = "labs/addressing-and-routing/scripts/status.sh"
+    hold = true
+
+    [[items.items.items]]
+    title = "Shell command for a node"
+    script = "labs/addressing-and-routing/scripts/shell.sh"
+    hold = true
+
+    [[items.items.items]]
+    title = "Reset to baseline"
+    script = "labs/addressing-and-routing/scripts/reset.sh"
+
+    [[items.items.items]]
+    title = "Teardown"
+    script = "labs/addressing-and-routing/scripts/teardown.sh"
+
+    [[items.items.items]]
+    title = "Open handout"
+    script = "labs/addressing-and-routing/scripts/handout.sh"
 
   [[items.items]]
-  title = "Status"
-  script = "labs/arp-hijacking/scripts/status.sh"
-  hold = true
+  title = "NAT and port forwarding at the edge"
+
+    [[items.items.items]]
+    title = "Spawn"
+    script = "labs/nat-port-forwarding/scripts/spawn.sh"
+
+    [[items.items.items]]
+    title = "Status"
+    script = "labs/nat-port-forwarding/scripts/status.sh"
+    hold = true
+
+    [[items.items.items]]
+    title = "Shell command for a node"
+    script = "labs/nat-port-forwarding/scripts/shell.sh"
+    hold = true
+
+    [[items.items.items]]
+    title = "Reset to baseline"
+    script = "labs/nat-port-forwarding/scripts/reset.sh"
+
+    [[items.items.items]]
+    title = "Teardown"
+    script = "labs/nat-port-forwarding/scripts/teardown.sh"
+
+    [[items.items.items]]
+    title = "Open handout"
+    script = "labs/nat-port-forwarding/scripts/handout.sh"
 
   [[items.items]]
-  title = "Shell command for a node"
-  script = "labs/arp-hijacking/scripts/shell.sh"
+  title = "OSPF configuration and path selection"
 
-    [[items.items.args]]
-    prompt = "Which node?"
+    [[items.items.items]]
+    title = "Spawn"
+    script = "labs/ospf-routing/scripts/spawn.sh"
 
-      [[items.items.args.options]]
-      value = "attacker"
-      follow_up = []
+    [[items.items.items]]
+    title = "Status"
+    script = "labs/ospf-routing/scripts/status.sh"
+    hold = true
 
-      [[items.items.args.options]]
-      value = "victim"
-      follow_up = []
+    [[items.items.items]]
+    title = "Shell command for a node"
+    script = "labs/ospf-routing/scripts/shell.sh"
+    hold = true
 
-      [[items.items.args.options]]
-      value = "gateway"
-      follow_up = []
+    [[items.items.items]]
+    title = "Reset to baseline"
+    script = "labs/ospf-routing/scripts/reset.sh"
 
-      [[items.items.args.options]]
-      value = "S1"
-      follow_up = []
+    [[items.items.items]]
+    title = "Teardown"
+    script = "labs/ospf-routing/scripts/teardown.sh"
 
-  [[items.items]]
-  title = "Reset to baseline"
-  script = "labs/arp-hijacking/scripts/reset.sh"
-
-  [[items.items]]
-  title = "Teardown"
-  script = "labs/arp-hijacking/scripts/teardown.sh"
-
-  [[items.items]]
-  title = "Open handout"
-  script = "labs/arp-hijacking/scripts/handout.sh"
+    [[items.items.items]]
+    title = "Open handout"
+    script = "labs/ospf-routing/scripts/handout.sh"
 
 [[items]]
-title = "DHCP starvation and rogue DHCP"
+title = "Host and service management"
 
   [[items.items]]
-  title = "Spawn"
-  script = "labs/dhcp-starvation/scripts/spawn.sh"
+  title = "VPS provisioning and hardening"
+
+    [[items.items.items]]
+    title = "Spawn"
+    script = "labs/vps-hardening/scripts/spawn.sh"
+
+    [[items.items.items]]
+    title = "Status"
+    script = "labs/vps-hardening/scripts/status.sh"
+    hold = true
+
+    [[items.items.items]]
+    title = "Shell command for a node"
+    script = "labs/vps-hardening/scripts/shell.sh"
+    hold = true
+
+    [[items.items.items]]
+    title = "Reset to baseline"
+    script = "labs/vps-hardening/scripts/reset.sh"
+
+    [[items.items.items]]
+    title = "Teardown"
+    script = "labs/vps-hardening/scripts/teardown.sh"
+
+    [[items.items.items]]
+    title = "Open handout"
+    script = "labs/vps-hardening/scripts/handout.sh"
 
   [[items.items]]
-  title = "Status"
-  script = "labs/dhcp-starvation/scripts/status.sh"
-  hold = true
+  title = "Web service deployment with a private CA"
+
+    [[items.items.items]]
+    title = "Spawn"
+    script = "labs/private-ca/scripts/spawn.sh"
+
+    [[items.items.items]]
+    title = "Status"
+    script = "labs/private-ca/scripts/status.sh"
+    hold = true
+
+    [[items.items.items]]
+    title = "Shell command for a node"
+    script = "labs/private-ca/scripts/shell.sh"
+    hold = true
+
+    [[items.items.items]]
+    title = "Reset to baseline"
+    script = "labs/private-ca/scripts/reset.sh"
+
+    [[items.items.items]]
+    title = "Teardown"
+    script = "labs/private-ca/scripts/teardown.sh"
+
+    [[items.items.items]]
+    title = "Open handout"
+    script = "labs/private-ca/scripts/handout.sh"
 
   [[items.items]]
-  title = "Shell command for a node"
-  script = "labs/dhcp-starvation/scripts/shell.sh"
+  title = "Authoritative DNS, zone authoring and delegation"
 
-    [[items.items.args]]
-    prompt = "Which node?"
+    [[items.items.items]]
+    title = "Spawn"
+    script = "labs/authoritative-dns/scripts/spawn.sh"
 
-      [[items.items.args.options]]
-      value = "attacker"
-      follow_up = []
+    [[items.items.items]]
+    title = "Status"
+    script = "labs/authoritative-dns/scripts/status.sh"
+    hold = true
 
-      [[items.items.args.options]]
-      value = "victim"
-      follow_up = []
+    [[items.items.items]]
+    title = "Shell command for a node"
+    script = "labs/authoritative-dns/scripts/shell.sh"
+    hold = true
 
-      [[items.items.args.options]]
-      value = "server"
-      follow_up = []
+    [[items.items.items]]
+    title = "Reset to baseline"
+    script = "labs/authoritative-dns/scripts/reset.sh"
 
-      [[items.items.args.options]]
-      value = "S1"
-      follow_up = []
+    [[items.items.items]]
+    title = "Teardown"
+    script = "labs/authoritative-dns/scripts/teardown.sh"
 
-  [[items.items]]
-  title = "Reset to baseline"
-  script = "labs/dhcp-starvation/scripts/reset.sh"
-
-  [[items.items]]
-  title = "Teardown"
-  script = "labs/dhcp-starvation/scripts/teardown.sh"
+    [[items.items.items]]
+    title = "Open handout"
+    script = "labs/authoritative-dns/scripts/handout.sh"
 
   [[items.items]]
-  title = "Open handout"
-  script = "labs/dhcp-starvation/scripts/handout.sh"
+  title = "Centralised logging and incident reconstruction"
+
+    [[items.items.items]]
+    title = "Spawn"
+    script = "labs/centralised-logging/scripts/spawn.sh"
+
+    [[items.items.items]]
+    title = "Status"
+    script = "labs/centralised-logging/scripts/status.sh"
+    hold = true
+
+    [[items.items.items]]
+    title = "Shell command for a node"
+    script = "labs/centralised-logging/scripts/shell.sh"
+    hold = true
+
+    [[items.items.items]]
+    title = "Run the incident"
+    script = "labs/centralised-logging/scripts/incident.sh"
+    hold = true
+
+    [[items.items.items]]
+    title = "Reset to baseline"
+    script = "labs/centralised-logging/scripts/reset.sh"
+
+    [[items.items.items]]
+    title = "Teardown"
+    script = "labs/centralised-logging/scripts/teardown.sh"
+
+    [[items.items.items]]
+    title = "Open handout"
+    script = "labs/centralised-logging/scripts/handout.sh"
+
+  [[items.items]]
+  title = "Bastion host and access control"
+
+    [[items.items.items]]
+    title = "Spawn"
+    script = "labs/bastion-access/scripts/spawn.sh"
+
+    [[items.items.items]]
+    title = "Status"
+    script = "labs/bastion-access/scripts/status.sh"
+    hold = true
+
+    [[items.items.items]]
+    title = "Shell command for a node"
+    script = "labs/bastion-access/scripts/shell.sh"
+    hold = true
+
+    [[items.items.items]]
+    title = "Reset to baseline"
+    script = "labs/bastion-access/scripts/reset.sh"
+
+    [[items.items.items]]
+    title = "Teardown"
+    script = "labs/bastion-access/scripts/teardown.sh"
+
+    [[items.items.items]]
+    title = "Open handout"
+    script = "labs/bastion-access/scripts/handout.sh"
+
+  [[items.items]]
+  title = "Service availability and failover"
+
+    [[items.items.items]]
+    title = "Spawn"
+    script = "labs/service-failover/scripts/spawn.sh"
+
+    [[items.items.items]]
+    title = "Status"
+    script = "labs/service-failover/scripts/status.sh"
+    hold = true
+
+    [[items.items.items]]
+    title = "Shell command for a node"
+    script = "labs/service-failover/scripts/shell.sh"
+    hold = true
+
+    [[items.items.items]]
+    title = "Reset to baseline"
+    script = "labs/service-failover/scripts/reset.sh"
+
+    [[items.items.items]]
+    title = "Teardown"
+    script = "labs/service-failover/scripts/teardown.sh"
+
+    [[items.items.items]]
+    title = "Open handout"
+    script = "labs/service-failover/scripts/handout.sh"
 
 [[items]]
-title = "Source spoofing and reflection"
+title = "Layer 2 attacks and mitigations"
 
   [[items.items]]
-  title = "Spawn"
-  script = "labs/reflection-attacks/scripts/spawn.sh"
+  title = "ARP hijacking"
+
+    [[items.items.items]]
+    title = "Spawn"
+    script = "labs/arp-hijacking/scripts/spawn.sh"
+
+    [[items.items.items]]
+    title = "Status"
+    script = "labs/arp-hijacking/scripts/status.sh"
+    hold = true
+
+    [[items.items.items]]
+    title = "Shell command for a node"
+    script = "labs/arp-hijacking/scripts/shell.sh"
+    hold = true
+
+    [[items.items.items]]
+    title = "Reset to baseline"
+    script = "labs/arp-hijacking/scripts/reset.sh"
+
+    [[items.items.items]]
+    title = "Teardown"
+    script = "labs/arp-hijacking/scripts/teardown.sh"
+
+    [[items.items.items]]
+    title = "Open handout"
+    script = "labs/arp-hijacking/scripts/handout.sh"
 
   [[items.items]]
-  title = "Status"
-  script = "labs/reflection-attacks/scripts/status.sh"
-  hold = true
+  title = "DHCP starvation and rogue DHCP"
+
+    [[items.items.items]]
+    title = "Spawn"
+    script = "labs/dhcp-starvation/scripts/spawn.sh"
+
+    [[items.items.items]]
+    title = "Status"
+    script = "labs/dhcp-starvation/scripts/status.sh"
+    hold = true
+
+    [[items.items.items]]
+    title = "Shell command for a node"
+    script = "labs/dhcp-starvation/scripts/shell.sh"
+    hold = true
+
+    [[items.items.items]]
+    title = "Reset to baseline"
+    script = "labs/dhcp-starvation/scripts/reset.sh"
+
+    [[items.items.items]]
+    title = "Teardown"
+    script = "labs/dhcp-starvation/scripts/teardown.sh"
+
+    [[items.items.items]]
+    title = "Open handout"
+    script = "labs/dhcp-starvation/scripts/handout.sh"
 
   [[items.items]]
-  title = "Shell command for a node"
-  script = "labs/reflection-attacks/scripts/shell.sh"
+  title = "MAC flooding and port security"
 
-    [[items.items.args]]
-    prompt = "Which node?"
+    [[items.items.items]]
+    title = "Spawn"
+    script = "labs/mac-flooding/scripts/spawn.sh"
 
-      [[items.items.args.options]]
-      value = "attacker"
-      follow_up = []
+    [[items.items.items]]
+    title = "Status"
+    script = "labs/mac-flooding/scripts/status.sh"
+    hold = true
 
-      [[items.items.args.options]]
-      value = "router"
-      follow_up = []
+    [[items.items.items]]
+    title = "Shell command for a node"
+    script = "labs/mac-flooding/scripts/shell.sh"
+    hold = true
 
-      [[items.items.args.options]]
-      value = "victim"
-      follow_up = []
+    [[items.items.items]]
+    title = "Reset to baseline"
+    script = "labs/mac-flooding/scripts/reset.sh"
 
-      [[items.items.args.options]]
-      value = "dns"
-      follow_up = []
+    [[items.items.items]]
+    title = "Teardown"
+    script = "labs/mac-flooding/scripts/teardown.sh"
 
-      [[items.items.args.options]]
-      value = "ntp"
-      follow_up = []
-
-  [[items.items]]
-  title = "Reset to baseline"
-  script = "labs/reflection-attacks/scripts/reset.sh"
+    [[items.items.items]]
+    title = "Open handout"
+    script = "labs/mac-flooding/scripts/handout.sh"
 
   [[items.items]]
-  title = "Teardown"
-  script = "labs/reflection-attacks/scripts/teardown.sh"
+  title = "STP root bridge takeover"
+
+    [[items.items.items]]
+    title = "Spawn"
+    script = "labs/stp-root-takeover/scripts/spawn.sh"
+
+    [[items.items.items]]
+    title = "Status"
+    script = "labs/stp-root-takeover/scripts/status.sh"
+
+    [[items.items.items]]
+    title = "Shell command for a node"
+    script = "labs/stp-root-takeover/scripts/shell.sh"
+    hold = true
+
+    [[items.items.items]]
+    title = "Reset to baseline"
+    script = "labs/stp-root-takeover/scripts/reset.sh"
+
+    [[items.items.items]]
+    title = "Teardown"
+    script = "labs/stp-root-takeover/scripts/teardown.sh"
+
+    [[items.items.items]]
+    title = "Open handout"
+    script = "labs/stp-root-takeover/scripts/handout.sh"
 
   [[items.items]]
-  title = "Open handout"
-  script = "labs/reflection-attacks/scripts/handout.sh"
+  title = "VLAN hopping"
+
+    [[items.items.items]]
+    title = "Spawn"
+    script = "labs/vlan-hopping/scripts/spawn.sh"
+
+    [[items.items.items]]
+    title = "Status"
+    script = "labs/vlan-hopping/scripts/status.sh"
+    hold = true
+
+    [[items.items.items]]
+    title = "Shell command for a node"
+    script = "labs/vlan-hopping/scripts/shell.sh"
+    hold = true
+
+    [[items.items.items]]
+    title = "Reset to baseline"
+    script = "labs/vlan-hopping/scripts/reset.sh"
+
+    [[items.items.items]]
+    title = "Teardown"
+    script = "labs/vlan-hopping/scripts/teardown.sh"
+
+    [[items.items.items]]
+    title = "Open handout"
+    script = "labs/vlan-hopping/scripts/handout.sh"
 
 [[items]]
-title = "VLAN hopping"
+title = "Layer 3 and 4 attacks and mitigations"
 
   [[items.items]]
-  title = "Spawn"
-  script = "labs/vlan-hopping/scripts/spawn.sh"
+  title = "Internet scanning and service discovery"
+
+    [[items.items.items]]
+    title = "Spawn"
+    script = "labs/scanning/scripts/spawn.sh"
+
+    [[items.items.items]]
+    title = "Status"
+    script = "labs/scanning/scripts/status.sh"
+    hold = true
+
+    [[items.items.items]]
+    title = "Shell command for a node"
+    script = "labs/scanning/scripts/shell.sh"
+    hold = true
+
+    [[items.items.items]]
+    title = "Reset to baseline"
+    script = "labs/scanning/scripts/reset.sh"
+
+    [[items.items.items]]
+    title = "Teardown"
+    script = "labs/scanning/scripts/teardown.sh"
+
+    [[items.items.items]]
+    title = "Open handout"
+    script = "labs/scanning/scripts/handout.sh"
 
   [[items.items]]
-  title = "Status"
-  script = "labs/vlan-hopping/scripts/status.sh"
-  hold = true
+  title = "Source spoofing and reflection"
+
+    [[items.items.items]]
+    title = "Spawn"
+    script = "labs/reflection-attacks/scripts/spawn.sh"
+
+    [[items.items.items]]
+    title = "Status"
+    script = "labs/reflection-attacks/scripts/status.sh"
+    hold = true
+
+    [[items.items.items]]
+    title = "Shell command for a node"
+    script = "labs/reflection-attacks/scripts/shell.sh"
+    hold = true
+
+    [[items.items.items]]
+    title = "Reset to baseline"
+    script = "labs/reflection-attacks/scripts/reset.sh"
+
+    [[items.items.items]]
+    title = "Teardown"
+    script = "labs/reflection-attacks/scripts/teardown.sh"
+
+    [[items.items.items]]
+    title = "Open handout"
+    script = "labs/reflection-attacks/scripts/handout.sh"
 
   [[items.items]]
-  title = "Shell command for a node"
-  script = "labs/vlan-hopping/scripts/shell.sh"
+  title = "BGP prefix hijacking and RPKI"
 
-    [[items.items.args]]
-    prompt = "Which node?"
+    [[items.items.items]]
+    title = "Spawn"
+    script = "labs/bgp-hijacking/scripts/spawn.sh"
 
-      [[items.items.args.options]]
-      value = "attacker"
-      follow_up = []
+    [[items.items.items]]
+    title = "Status"
+    script = "labs/bgp-hijacking/scripts/status.sh"
+    hold = true
 
-      [[items.items.args.options]]
-      value = "peer"
-      follow_up = []
+    [[items.items.items]]
+    title = "Shell command for a node"
+    script = "labs/bgp-hijacking/scripts/shell.sh"
+    hold = true
 
-      [[items.items.args.options]]
-      value = "victim"
-      follow_up = []
+    [[items.items.items]]
+    title = "Reset to baseline"
+    script = "labs/bgp-hijacking/scripts/reset.sh"
 
-      [[items.items.args.options]]
-      value = "S1"
-      follow_up = []
+    [[items.items.items]]
+    title = "Teardown"
+    script = "labs/bgp-hijacking/scripts/teardown.sh"
 
-      [[items.items.args.options]]
-      value = "S2"
-      follow_up = []
-
-  [[items.items]]
-  title = "Reset to baseline"
-  script = "labs/vlan-hopping/scripts/reset.sh"
+    [[items.items.items]]
+    title = "Open handout"
+    script = "labs/bgp-hijacking/scripts/handout.sh"
 
   [[items.items]]
-  title = "Teardown"
-  script = "labs/vlan-hopping/scripts/teardown.sh"
+  title = "Firewalling and intrusion detection with Suricata"
 
-  [[items.items]]
-  title = "Open handout"
-  script = "labs/vlan-hopping/scripts/handout.sh"
+    [[items.items.items]]
+    title = "Spawn"
+    script = "labs/intrusion-detection/scripts/spawn.sh"
+
+    [[items.items.items]]
+    title = "Status"
+    script = "labs/intrusion-detection/scripts/status.sh"
+    hold = true
+
+    [[items.items.items]]
+    title = "Shell command for a node"
+    script = "labs/intrusion-detection/scripts/shell.sh"
+    hold = true
+
+    [[items.items.items]]
+    title = "Reset to baseline"
+    script = "labs/intrusion-detection/scripts/reset.sh"
+
+    [[items.items.items]]
+    title = "Teardown"
+    script = "labs/intrusion-detection/scripts/teardown.sh"
+
+    [[items.items.items]]
+    title = "Open handout"
+    script = "labs/intrusion-detection/scripts/handout.sh"
 
 [[items]]
-title = "BGP prefix hijacking and RPKI"
+title = "Application layer attacks and mitigations"
 
   [[items.items]]
-  title = "Spawn"
-  script = "labs/bgp-hijacking/scripts/spawn.sh"
+  title = "DNS cache poisoning and resolver hardening"
+
+    [[items.items.items]]
+    title = "Spawn"
+    script = "labs/dns-poisoning/scripts/spawn.sh"
+
+    [[items.items.items]]
+    title = "Status"
+    script = "labs/dns-poisoning/scripts/status.sh"
+    hold = true
+
+    [[items.items.items]]
+    title = "Shell command for a node"
+    script = "labs/dns-poisoning/scripts/shell.sh"
+    hold = true
+
+    [[items.items.items]]
+    title = "Reset to baseline"
+    script = "labs/dns-poisoning/scripts/reset.sh"
+
+    [[items.items.items]]
+    title = "Teardown"
+    script = "labs/dns-poisoning/scripts/teardown.sh"
+
+    [[items.items.items]]
+    title = "Open handout"
+    script = "labs/dns-poisoning/scripts/handout.sh"
 
   [[items.items]]
-  title = "Status"
-  script = "labs/bgp-hijacking/scripts/status.sh"
-  hold = true
+  title = "Honeypot deployment and containment"
+
+    [[items.items.items]]
+    title = "Spawn"
+    script = "labs/honeypot-deployment/scripts/spawn.sh"
+
+    [[items.items.items]]
+    title = "Status"
+    script = "labs/honeypot-deployment/scripts/status.sh"
+    hold = true
+
+    [[items.items.items]]
+    title = "Shell command for a node"
+    script = "labs/honeypot-deployment/scripts/shell.sh"
+    hold = true
+
+    [[items.items.items]]
+    title = "Reset to baseline"
+    script = "labs/honeypot-deployment/scripts/reset.sh"
+
+    [[items.items.items]]
+    title = "Teardown"
+    script = "labs/honeypot-deployment/scripts/teardown.sh"
+
+    [[items.items.items]]
+    title = "Open handout"
+    script = "labs/honeypot-deployment/scripts/handout.sh"
 
   [[items.items]]
-  title = "Shell command for a node"
-  script = "labs/bgp-hijacking/scripts/shell.sh"
+  title = "Malware command-and-control traffic analysis"
 
-    [[items.items.args]]
-    prompt = "Which node? (as1-as6 open vtysh; hosts, rir and validator open a shell)"
+    [[items.items.items]]
+    title = "Spawn"
+    script = "labs/c2-beaconing/scripts/spawn.sh"
 
-      [[items.items.args.options]]
-      value = "as1"
-      follow_up = []
+    [[items.items.items]]
+    title = "Status"
+    script = "labs/c2-beaconing/scripts/status.sh"
+    hold = true
 
-      [[items.items.args.options]]
-      value = "as2"
-      follow_up = []
+    [[items.items.items]]
+    title = "Shell command for a node"
+    script = "labs/c2-beaconing/scripts/shell.sh"
+    hold = true
 
-      [[items.items.args.options]]
-      value = "as3"
-      follow_up = []
+    [[items.items.items]]
+    title = "Advance the incident"
+    script = "labs/c2-beaconing/scripts/advance.sh"
+    hold = true
 
-      [[items.items.args.options]]
-      value = "as4"
-      follow_up = []
+    [[items.items.items]]
+    title = "Reset to baseline"
+    script = "labs/c2-beaconing/scripts/reset.sh"
 
-      [[items.items.args.options]]
-      value = "as5"
-      follow_up = []
+    [[items.items.items]]
+    title = "Teardown"
+    script = "labs/c2-beaconing/scripts/teardown.sh"
 
-      [[items.items.args.options]]
-      value = "as6"
-      follow_up = []
-
-      [[items.items.args.options]]
-      value = "victim"
-      follow_up = []
-
-      [[items.items.args.options]]
-      value = "client2"
-      follow_up = []
-
-      [[items.items.args.options]]
-      value = "client3"
-      follow_up = []
-
-      [[items.items.args.options]]
-      value = "client4"
-      follow_up = []
-
-      [[items.items.args.options]]
-      value = "client5"
-      follow_up = []
-
-      [[items.items.args.options]]
-      value = "attacker"
-      follow_up = []
-
-      [[items.items.args.options]]
-      value = "rir"
-      follow_up = []
-
-      [[items.items.args.options]]
-      value = "validator"
-      follow_up = []
+    [[items.items.items]]
+    title = "Open handout"
+    script = "labs/c2-beaconing/scripts/handout.sh"
 
   [[items.items]]
-  title = "Reset to baseline"
-  script = "labs/bgp-hijacking/scripts/reset.sh"
+  title = "DNS tunnelling and egress control"
 
-  [[items.items]]
-  title = "Teardown"
-  script = "labs/bgp-hijacking/scripts/teardown.sh"
+    [[items.items.items]]
+    title = "Spawn"
+    script = "labs/dns-tunnelling/scripts/spawn.sh"
 
-  [[items.items]]
-  title = "Open handout"
-  script = "labs/bgp-hijacking/scripts/handout.sh"
+    [[items.items.items]]
+    title = "Status"
+    script = "labs/dns-tunnelling/scripts/status.sh"
+    hold = true
+
+    [[items.items.items]]
+    title = "Shell command for a node"
+    script = "labs/dns-tunnelling/scripts/shell.sh"
+    hold = true
+
+    [[items.items.items]]
+    title = "Reset to baseline"
+    script = "labs/dns-tunnelling/scripts/reset.sh"
+
+    [[items.items.items]]
+    title = "Teardown"
+    script = "labs/dns-tunnelling/scripts/teardown.sh"
+
+    [[items.items.items]]
+    title = "Open handout"
+    script = "labs/dns-tunnelling/scripts/handout.sh"
 
 [[items]]
-title = "Internet scanning and service discovery"
+title = "Software exploitation and containment"
 
   [[items.items]]
-  title = "Spawn"
-  script = "labs/scanning/scripts/spawn.sh"
+  title = "Path traversal to credential reuse"
+
+    [[items.items.items]]
+    title = "Spawn"
+    script = "labs/path-traversal/scripts/spawn.sh"
+
+    [[items.items.items]]
+    title = "Status"
+    script = "labs/path-traversal/scripts/status.sh"
+    hold = true
+
+    [[items.items.items]]
+    title = "Shell command for a node"
+    script = "labs/path-traversal/scripts/shell.sh"
+    hold = true
+
+    [[items.items.items]]
+    title = "Reset to baseline"
+    script = "labs/path-traversal/scripts/reset.sh"
+
+    [[items.items.items]]
+    title = "Teardown"
+    script = "labs/path-traversal/scripts/teardown.sh"
+
+    [[items.items.items]]
+    title = "Open handout"
+    script = "labs/path-traversal/scripts/handout.sh"
 
   [[items.items]]
-  title = "Status"
-  script = "labs/scanning/scripts/status.sh"
-  hold = true
+  title = "Command injection to reverse shell"
+
+    [[items.items.items]]
+    title = "Spawn"
+    script = "labs/command-injection/scripts/spawn.sh"
+
+    [[items.items.items]]
+    title = "Status"
+    script = "labs/command-injection/scripts/status.sh"
+    hold = true
+
+    [[items.items.items]]
+    title = "Shell command for a node"
+    script = "labs/command-injection/scripts/shell.sh"
+
+      [[items.items.items.args]]
+      name = "node"
+      prompt = "Which node?"
+
+        [[items.items.items.args.options]]
+        value = "attacker"
+        follow_up = []
+
+        [[items.items.items.args.options]]
+        value = "web"
+        follow_up = []
+
+        [[items.items.items.args.options]]
+        value = "gw"
+        follow_up = []
+
+        [[items.items.items.args.options]]
+        value = "ops"
+        follow_up = []
+
+        [[items.items.items.args.options]]
+        value = "mon"
+        follow_up = []
+
+    [[items.items.items]]
+    title = "Reset to baseline"
+    script = "labs/command-injection/scripts/reset.sh"
+
+    [[items.items.items]]
+    title = "Teardown"
+    script = "labs/command-injection/scripts/teardown.sh"
+
+    [[items.items.items]]
+    title = "Open handout"
+    script = "labs/command-injection/scripts/handout.sh"
 
   [[items.items]]
-  title = "Shell command for a node"
-  script = "labs/scanning/scripts/shell.sh"
+  title = "SQL injection to credential disclosure"
 
-    [[items.items.args]]
-    prompt = "Which node? (every step of this lab runs on attacker)"
+    [[items.items.items]]
+    title = "Spawn"
+    script = "labs/sql-injection/scripts/spawn.sh"
 
-      [[items.items.args.options]]
-      value = "attacker"
-      follow_up = []
+    [[items.items.items]]
+    title = "Status"
+    script = "labs/sql-injection/scripts/status.sh"
+    hold = true
 
-      [[items.items.args.options]]
-      value = "router"
-      follow_up = []
+    [[items.items.items]]
+    title = "Shell command for a node"
+    script = "labs/sql-injection/scripts/shell.sh"
+    hold = true
 
-      [[items.items.args.options]]
-      value = "host1"
-      follow_up = []
+    [[items.items.items]]
+    title = "Reset to baseline"
+    script = "labs/sql-injection/scripts/reset.sh"
 
-      [[items.items.args.options]]
-      value = "host2"
-      follow_up = []
+    [[items.items.items]]
+    title = "Teardown"
+    script = "labs/sql-injection/scripts/teardown.sh"
 
-      [[items.items.args.options]]
-      value = "host3"
-      follow_up = []
-
-      [[items.items.args.options]]
-      value = "host4"
-      follow_up = []
+    [[items.items.items]]
+    title = "Open handout"
+    script = "labs/sql-injection/scripts/handout.sh"
 
   [[items.items]]
-  title = "Reset to baseline"
-  script = "labs/scanning/scripts/reset.sh"
+  title = "Stack overflow to control flow"
 
-  [[items.items]]
-  title = "Teardown"
-  script = "labs/scanning/scripts/teardown.sh"
+    [[items.items.items]]
+    title = "Spawn"
+    script = "labs/stack-overflow/scripts/spawn.sh"
 
-  [[items.items]]
-  title = "Open handout"
-  script = "labs/scanning/scripts/handout.sh"
+    [[items.items.items]]
+    title = "Status"
+    script = "labs/stack-overflow/scripts/status.sh"
+    hold = true
+
+    [[items.items.items]]
+    title = "Shell command for a node"
+    script = "labs/stack-overflow/scripts/shell.sh"
+    hold = true
+
+    [[items.items.items]]
+    title = "Reset to baseline"
+    script = "labs/stack-overflow/scripts/reset.sh"
+
+    [[items.items.items]]
+    title = "Teardown"
+    script = "labs/stack-overflow/scripts/teardown.sh"
+
+    [[items.items.items]]
+    title = "Open handout"
+    script = "labs/stack-overflow/scripts/handout.sh"
 
 [[items]]
-title = "STP root bridge takeover"
+title = "Malware analysis and detection engineering"
 
   [[items.items]]
-  title = "Spawn"
-  script = "labs/stp-root-takeover/scripts/spawn.sh"
+  title = "YARA rule authoring and generalisation"
 
-  [[items.items]]
-  title = "Status"
-  script = "labs/stp-root-takeover/scripts/status.sh"
+    [[items.items.items]]
+    title = "Spawn"
+    script = "labs/yara-detection/scripts/spawn.sh"
 
-  [[items.items]]
-  title = "Shell command for a node"
-  script = "labs/stp-root-takeover/scripts/shell.sh"
+    [[items.items.items]]
+    title = "Status"
+    script = "labs/yara-detection/scripts/status.sh"
+    hold = true
 
-    [[items.items.args]]
-    name = "node"
-    prompt = "Which node?"
+    [[items.items.items]]
+    title = "Shell command for a node"
+    script = "labs/yara-detection/scripts/shell.sh"
+    hold = true
 
-      [[items.items.args.options]]
-      value = "attacker"
-      follow_up = []
+    [[items.items.items]]
+    title = "Reset to baseline"
+    script = "labs/yara-detection/scripts/reset.sh"
 
-      [[items.items.args.options]]
-      value = "victim"
-      follow_up = []
+    [[items.items.items]]
+    title = "Teardown"
+    script = "labs/yara-detection/scripts/teardown.sh"
 
-      [[items.items.args.options]]
-      value = "gateway"
-      follow_up = []
-
-      [[items.items.args.options]]
-      value = "S1"
-      follow_up = []
-
-      [[items.items.args.options]]
-      value = "S2"
-      follow_up = []
-
-      [[items.items.args.options]]
-      value = "S3"
-      follow_up = []
-
-  [[items.items]]
-  title = "Reset to baseline"
-  script = "labs/stp-root-takeover/scripts/reset.sh"
-
-  [[items.items]]
-  title = "Teardown"
-  script = "labs/stp-root-takeover/scripts/teardown.sh"
-
-  [[items.items]]
-  title = "Open handout"
-  script = "labs/stp-root-takeover/scripts/handout.sh"
+    [[items.items.items]]
+    title = "Open handout"
+    script = "labs/yara-detection/scripts/handout.sh"
 
 [[items]]
-title = "MAC flooding and port security"
+title = "Practice ranges"
 
   [[items.items]]
-  title = "Spawn"
-  script = "labs/mac-flooding/scripts/spawn.sh"
+  title = "Scanning range (randomised)"
 
-  [[items.items]]
-  title = "Status"
-  script = "labs/mac-flooding/scripts/status.sh"
-  hold = true
+    [[items.items.items]]
+    title = "Spawn"
+    script = "labs/scanning-range/scripts/spawn.sh"
 
-  [[items.items]]
-  title = "Shell command for a node"
-  script = "labs/mac-flooding/scripts/shell.sh"
+      [[items.items.items.args]]
+      name = "tier"
+      prompt = "Difficulty? (easy: one subnet, handed to you / normal: a /16 to search / hard: nothing but your own address)"
 
-    [[items.items.args]]
-    name = "node"
-    prompt = "Which node?"
+        [[items.items.items.args.options]]
+        value = "easy"
+        follow_up = []
 
-      [[items.items.args.options]]
-      value = "attacker"
-      follow_up = []
+        [[items.items.items.args.options]]
+        value = "normal"
+        follow_up = []
 
-      [[items.items.args.options]]
-      value = "victim"
-      follow_up = []
+        [[items.items.items.args.options]]
+        value = "hard"
+        follow_up = []
 
-      [[items.items.args.options]]
-      value = "gateway"
-      follow_up = []
+      [[items.items.items.args]]
+      name = "seed"
+      prompt = "Seed? (blank for a network nobody has seen; a number from an earlier run to get that network back)"
+      optional = true
 
-      [[items.items.args.options]]
-      value = "staff"
-      follow_up = []
+    [[items.items.items]]
+    title = "Status"
+    script = "labs/scanning-range/scripts/status.sh"
+    hold = true
 
-      [[items.items.args.options]]
-      value = "S1"
-      follow_up = []
+    [[items.items.items]]
+    title = "Shell command for a node"
+    script = "labs/scanning-range/scripts/shell.sh"
+    hold = true
 
-      [[items.items.args.options]]
-      value = "S2"
-      follow_up = []
+    [[items.items.items]]
+    title = "Score"
+    script = "labs/scanning-range/scripts/score.sh"
+    hold = true
 
-  [[items.items]]
-  title = "Reset to baseline"
-  script = "labs/mac-flooding/scripts/reset.sh"
+    [[items.items.items]]
+    title = "Reveal"
+    script = "labs/scanning-range/scripts/reveal.sh"
+    hold = true
 
-  [[items.items]]
-  title = "Teardown"
-  script = "labs/mac-flooding/scripts/teardown.sh"
+    [[items.items.items]]
+    title = "Regenerate"
+    script = "labs/scanning-range/scripts/regenerate.sh"
 
-  [[items.items]]
-  title = "Open handout"
-  script = "labs/mac-flooding/scripts/handout.sh"
+      [[items.items.items.args]]
+      name = "seed"
+      prompt = "Seed? (blank for a fresh network at the same difficulty)"
+      optional = true
 
-[[items]]
-title = "Honeypot deployment and containment"
+    [[items.items.items]]
+    title = "Teardown"
+    script = "labs/scanning-range/scripts/teardown.sh"
 
-  [[items.items]]
-  title = "Spawn"
-  script = "labs/honeypot-deployment/scripts/spawn.sh"
-
-  [[items.items]]
-  title = "Status"
-  script = "labs/honeypot-deployment/scripts/status.sh"
-  hold = true
-
-  [[items.items]]
-  title = "Shell command for a node"
-  script = "labs/honeypot-deployment/scripts/shell.sh"
-
-    [[items.items.args]]
-    name = "node"
-    prompt = "Which node?"
-
-      [[items.items.args.options]]
-      value = "attacker"
-      follow_up = []
-
-      [[items.items.args.options]]
-      value = "prod"
-      follow_up = []
-
-      [[items.items.args.options]]
-      value = "honeypot"
-      follow_up = []
-
-      [[items.items.args.options]]
-      value = "admin"
-      follow_up = []
-
-      [[items.items.args.options]]
-      value = "router"
-      follow_up = []
-
-  [[items.items]]
-  title = "Reset to baseline"
-  script = "labs/honeypot-deployment/scripts/reset.sh"
-
-  [[items.items]]
-  title = "Teardown"
-  script = "labs/honeypot-deployment/scripts/teardown.sh"
-
-  [[items.items]]
-  title = "Open handout"
-  script = "labs/honeypot-deployment/scripts/handout.sh"
+    [[items.items.items]]
+    title = "Open handout"
+    script = "labs/scanning-range/scripts/handout.sh"

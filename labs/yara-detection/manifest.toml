@@ -1,0 +1,60 @@
+title     = "YARA rule authoring and generalisation"
+layer     = "L7"
+summary   = "Thirty Windows executables on an analysis workstation, eight of them builds of one implant family and twenty-two benign, all compiled from C source inside the lab's own image and inert on a Linux host. Write a YARA rule that separates them, watch the obvious rule die when the packed builds arrive, and then find the two features UPX leaves alone. The rule is then scored against ten files that live in a container with no shell command and appear nowhere in the corpus: three single-feature rules reach a perfect score on the corpus and every one of them matches a benign file in the holdout. The end state is measured twice, on the two scores and on a pair of uploads, where the deployment target turns out not to implement the module the rule is written with and reports the family build clean."
+images    = ["d_host_yara", "d_host_yara_hold", "miniinterneteth/d_switch"]
+handout   = "handout.pdf"
+
+# One segment, four hosts, one switch. Nothing here routes: the subject is a
+# file format and a rule language, and the only traffic on the wire is the two
+# uploads Part 4 sends from the client to the scanner.
+#
+# The split between the two host images is the load-bearing part of the
+# topology. d_host_yara carries /srv/corpus and no holdout sample;
+# d_host_yara_hold carries /srv/holdout and no corpus. Both are built from one
+# Dockerfile with --target, off a `samples` stage that cross-compiles every PE
+# with x86_64-w64-mingw32-gcc and packs three of them with UPX. Nothing is
+# downloaded and no executable is written to the host filesystem.
+[topology]
+subnet = "126.0.0.0/24"
+
+  [topology.workstation]
+  host  = "126_L7_LAB_workstation = 126.0.0.10"
+  role  = "the analysis box, and the only machine Parts 1 to 3 touch"
+  holds = [
+    "/srv/corpus/set-a: 5 family builds and 15 benign files, none packed",
+    "/srv/corpus/set-b: 3 packed family builds and 7 benign files, 2 of them packed",
+    "/root/rules.yar: the file the learner writes and status.sh scores",
+  ]
+  runs  = [ "yara 4.5.2", "the pev suite 0.84 (readpe, pestr, peldd, pehash)", "upx 4.2.4" ]
+
+  [topology.scanner]
+  host = "126_L7_LAB_scanner = 126.0.0.20"
+  role = "the upload endpoint Part 4 deploys to; lighttpd with a CGI that runs clamscan against /etc/minilabs/deployed.yar, which is absent at spawn"
+  runs = [ "lighttpd with mod_cgi", "clamav 1.4.3" ]
+
+  [topology.client]
+  host  = "126_L7_LAB_client = 126.0.0.30"
+  role  = "posts the two files to the scanner"
+  holds = [
+    "invoice-viewer.exe: a packed build of the family; it has to be rejected",
+    "logtag-check.exe: a benign triage helper carrying the family's tag as a literal; it has to be accepted",
+  ]
+
+  [topology.holdout]
+  host = "126_L7_LAB_holdout = 126.0.0.40"
+  role = "the scoring appliance: 3 family builds and 7 benign files under /srv/holdout, and no service listening. shell.sh does not list it and the handout never sends a learner there; status.sh copies the rule file in, runs yara, and prints two counts and no filename."
+
+  [topology.switch]
+  host = "126_L7_LAB_S1"
+  role = "one Open vSwitch bridge, no STP, no VLANs"
+
+# Lifecycle actions map one-to-one to wrapper scripts, matching miniManager's
+# item-to-script contract (arguments are passed positionally). Paths are relative
+# to this lab directory.
+[actions]
+spawn        = "scripts/spawn.sh"
+status       = "scripts/status.sh"
+shell_in     = "scripts/shell.sh"
+reset        = "scripts/reset.sh"
+teardown     = "scripts/teardown.sh"
+open_handout = "scripts/handout.sh"

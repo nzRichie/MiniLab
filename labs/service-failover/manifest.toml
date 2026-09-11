@@ -1,0 +1,43 @@
+title     = "Service availability and failover"
+layer     = "L7"
+summary   = "Two backends holding the same site, and a reverse proxy in front of them that decides which one serves each request. Write the pool, the health check, the retry policy and the timeouts, then break the same backend three ways: its health endpoint stops returning 200, its process is killed, and its packets are dropped. A different setting is what keeps the client's count of failed requests at zero each time, and the health check is not the one that saves a request already in flight."
+images    = ["d_host_failover", "miniinterneteth/d_switch"]
+handout   = "handout.pdf"
+
+# Two segments meeting at the proxy. The front one is point to point and needs no
+# switch. The back one is switched, because a pool is a set rather than a pair: a
+# third backend is one more port on the same bridge and no re-wiring.
+#
+# The proxy does not forward between them (net.ipv4.ip_forward is 0), so the
+# client has no path to a backend at all and every connection a backend receives
+# is one HAProxy opened itself. That is what makes the proxy the only place a
+# backend's health can be observed from. Addresses are fixed so the handout can
+# name them and a lab script knows every address before the container exists.
+[topology]
+
+  [topology.front]
+  subnet = "117.0.0.0/24"
+  hosts  = [ "117_L7_LAB_client = 117.0.0.10" ]
+  proxy  = "117_L7_LAB_proxy = 117.0.0.1"
+  role   = "the client, and the vantage every measurement in this lab is taken from"
+
+  [topology.back]
+  subnet   = "117.1.0.0/24"
+  hosts    = [ "117_L7_LAB_web1 = 117.1.0.20", "117_L7_LAB_web2 = 117.1.0.30" ]
+  proxy    = "117_L7_LAB_proxy = 117.1.0.1"
+  switch   = "117_L7_LAB_S1, one Open vSwitch bridge, no STP, no VLANs"
+  services = [
+    "web1, web2: tcp/80 lighttpd; / serves the backend's own name, /health returns 200",
+    "proxy: tcp/80 haproxy 2.8 once the learner configures a frontend; runtime API on /run/haproxy/admin.sock",
+  ]
+
+# Lifecycle actions map one-to-one to wrapper scripts, matching miniManager's
+# item-to-script contract (arguments are passed positionally). Paths are relative
+# to this lab directory.
+[actions]
+spawn        = "scripts/spawn.sh"
+status       = "scripts/status.sh"
+shell_in     = "scripts/shell.sh"
+reset        = "scripts/reset.sh"
+teardown     = "scripts/teardown.sh"
+open_handout = "scripts/handout.sh"

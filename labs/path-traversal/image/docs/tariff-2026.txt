@@ -1,0 +1,8 @@
+Brindle Logistics -- standard tariff, 2026
+
+Band A   up to 30 kg, one pallet space       18.40 per consignment
+Band B   up to 250 kg, one pallet space      26.75 per consignment
+Band C   up to 500 kg, two pallet spaces     41.20 per consignment
+Band D   full load, up to 26 pallet spaces  318.00 per vehicle
+
+Surcharges: timed delivery 9.50, tail lift 6.00, out-of-area 11.25.

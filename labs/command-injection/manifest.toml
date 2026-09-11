@@ -1,0 +1,45 @@
+title     = "Command injection to reverse shell"
+layer     = "L7"
+summary   = "An appliance serves a public network-tools page that pastes the hostname the caller supplied into a command string and hands it to a shell. The learner appends a second command, reads a key the page was never meant to expose, and opens a shell that dials back out to a listener they control. The defence is three pieces of configuration and no change to the program: the web server drops to a service account, the webroot goes back to root ownership, and the gateway permits only the traffic the appliance legitimately originates. The first two visibly do not stop the callback and the third does, which is the point: least privilege caps what an injection is worth, and egress control is what ends it. The graded end state is that configuration, measured by two facts at once: nothing the appliance opens reaches the listener, and the page still returns echo replies for a legitimate address."
+images    = ["d_host_cmdinj", "miniinterneteth/d_switch"]
+handout   = "handout.pdf"
+
+# Two segments meeting at the gateway, each with a switch of its own so that no
+# port of one is a port of the other. The only path from the appliance to the
+# attacker's listener is through the gateway, which is what makes the gateway the
+# one place an egress allowlist can be enforced.
+#
+# The gateway forwards and does NOT translate addresses: every packet the
+# appliance originates still carries 120.0.0.10 when the allowlist sees it, which
+# is what lets the allowlist be written against that one source.
+[topology]
+
+  [topology.inside]
+  subnet   = "120.0.0.0/24"
+  gateway  = "120_L7_LAB_gw = 120.0.0.1"
+  switch   = "120_L7_LAB_S1, one Open vSwitch bridge, no STP, no VLANs"
+  hosts    = [
+    "120_L7_LAB_web = 120.0.0.10 (the appliance; lighttpd, the vulnerable CGI)",
+    "120_L7_LAB_ops = 120.0.0.20 (the operator's workstation; the legitimate caller)",
+  ]
+
+  [topology.outside]
+  subnet   = "120.1.0.0/24"
+  gateway  = "120_L7_LAB_gw = 120.1.0.1"
+  switch   = "120_L7_LAB_S2, one Open vSwitch bridge, no STP, no VLANs"
+  hosts    = [
+    "120_L7_LAB_mon = 120.1.0.20 (upstream monitor; the reachability target)",
+    "120_L7_LAB_attacker = 120.1.0.66 (the listener, on TCP 4444)",
+  ]
+
+# Lifecycle actions map one-to-one to wrapper scripts, matching miniManager's
+# item-to-script contract (arguments are passed positionally). Paths are relative
+# to this lab directory. This lab needs no `advance` action: nothing moves on its
+# own, the learner drives both the attack and every defence stage.
+[actions]
+spawn        = "scripts/spawn.sh"
+status       = "scripts/status.sh"
+shell_in     = "scripts/shell.sh"
+reset        = "scripts/reset.sh"
+teardown     = "scripts/teardown.sh"
+open_handout = "scripts/handout.sh"
