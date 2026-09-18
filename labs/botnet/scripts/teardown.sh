@@ -1,0 +1,34 @@
+#!/usr/bin/env bash
+# Remove this lab's containers and nothing else.
+#
+# Scoped to the fourteen containers named in lib.sh plus the wiring helper. It
+# must never call platform/cleanup/cleanup.sh or hard_reset.sh: those wipe the
+# whole mini-internet and delete groups/, and this lab is not the only thing
+# that may be running on the machine.
+#
+# There is no host network state to clean. Every veth in this lab lives inside a
+# container's namespace and every OVS port lives inside a switch container, so
+# removing the containers removes all of it. The helper is removed too, in case
+# an interrupted spawn left one behind.
+set -uo pipefail
+source "$( dirname "${BASH_SOURCE[0]}" )/lib.sh"
+
+log() { echo "[teardown] $*"; }
+
+removed=0
+for role in "${ALL_ROLES[@]}"; do
+    ctn="$( ctn_of "$role" )"
+    if docker ps -a --format '{{.Names}}' | grep -qx "$ctn"; then
+        log "removing $ctn"
+        docker rm -f "$ctn" >/dev/null 2>&1 && removed=$(( removed + 1 ))
+    fi
+done
+if docker ps -a --format '{{.Names}}' | grep -qx "$HELPER_CTN"; then
+    docker rm -f "$HELPER_CTN" >/dev/null 2>&1 && removed=$(( removed + 1 ))
+fi
+
+if [ "$removed" -eq 0 ]; then
+    log "nothing to remove; the lab was not running"
+else
+    log "removed $removed container(s). The lab is gone."
+fi

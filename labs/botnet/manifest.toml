@@ -1,0 +1,70 @@
+title     = "Botnet recruitment, tasking and containment"
+layer     = "L4"
+summary   = "A router with three legs: an inside server, a field of six ordinary machines and the site's admin, and an operator segment with a controller and a payload host. Install two bots by hand over SSH, then issue one standing task and watch the population grow itself as recruited hosts replay it on registration. Use the population for jobs that are not floods: harvest a credential that pays for the next wave, and guess an account by splitting a wordlist across the bots so no single source looks abnormal. Then write the router policy that holds. A per-source block list is correct and worthless within one wave; a per-source rate cap delays without denying; the fix that stops the spread is per-host credentials, on traffic the router never sees; and the graded end state is a default-deny policy written against what the network is for, which survives the controller's address being blocked because the bots rendezvous through a candidate nobody named."
+images    = ["d_host_botnet", "miniinterneteth/d_switch"]
+handout   = "handout.pdf"
+
+# Three legs meeting at one router, each on its own switch so the only path
+# between legs is the router. That is the whole defensive argument: recruitment,
+# tasking and payload delivery cross the router and a policy there can see them,
+# but spread from one field host to the next stays on the field switch and no
+# rule at the router can touch it. The router FORWARDS and does not translate,
+# so every packet still carries the address of the machine that sent it.
+#
+# The addresses are fixed and named here so the handout can quote them. What is
+# NOT named anywhere the learner is pointed at is the credential layout: which
+# field hosts share the weak password and which hold the one on no wordlist is
+# an answer, recorded only in solution/ and in a loot file the population must
+# steal to read.
+[topology]
+
+  [topology.inside]
+  subnet  = "128.0.0.0/24"
+  gateway = "128_L4_LAB_router = 128.0.0.1"
+  switch  = "128_L4_LAB_S1, one Open vSwitch bridge, no STP, no VLANs"
+  hosts   = [ "128_L4_LAB_server = 128.0.0.20" ]
+  role    = "the served network: lighttpd on tcp/80 and sshd on tcp/22, with a guessable account (opsadmin) and a maintenance account (sysops) whose password is on no wordlist"
+
+  [topology.field]
+  subnet  = "128.1.0.0/24"
+  gateway = "128_L4_LAB_router = 128.1.0.1"
+  switch  = "128_L4_LAB_S2, one Open vSwitch bridge, no STP, no VLANs"
+  hosts   = [
+    "128_L4_LAB_host1 = 128.1.0.42",
+    "128_L4_LAB_host2 = 128.1.0.13",
+    "128_L4_LAB_host3 = 128.1.0.68",
+    "128_L4_LAB_host4 = 128.1.0.27",
+    "128_L4_LAB_host5 = 128.1.0.88",
+    "128_L4_LAB_host6 = 128.1.0.53",
+    "128_L4_LAB_admin = 128.1.0.77",
+  ]
+  role    = "six ordinary machines running sshd, four sharing one weak root password and two holding another that is on no wordlist; plus the site's admin workstation, which runs no service and probes the server on a timer"
+  note    = "INSTRUCTOR: host3 and host6 hold the second password (Ptarmigan-Vault-7731); the migration notes on host4 record which. The handout, the figure and status.sh never print the layout; scripts/lib.sh names it."
+
+  [topology.operator]
+  subnet  = "128.2.0.0/24"
+  gateway = "128_L4_LAB_router = 128.2.0.1"
+  switch  = "128_L4_LAB_S3, one Open vSwitch bridge, no STP, no VLANs"
+  hosts   = [
+    "128_L4_LAB_c2 = 128.2.0.10 and 128.2.0.58",
+    "128_L4_LAB_loader = 128.2.0.40",
+  ]
+  role    = "the learner's controller (started by hand, tcp/8080) on two addresses that are both in the bot's rendezvous set, and the payload host serving bot.py and the wordlist over tcp/80"
+
+# Lifecycle actions map one-to-one to wrapper scripts, matching miniManager's
+# item-to-script contract (arguments pass positionally). Paths are relative to
+# this lab directory.
+#
+# `advance` is a seventh action this lab needs and most do not. The population
+# reaches four on its own, but the last two hosts hold a credential the learner
+# must first steal from the population's own harvest; advance is what turns that
+# stolen credential into the next wave, the same way the learner did the first
+# two by hand.
+[actions]
+spawn        = "scripts/spawn.sh"
+status       = "scripts/status.sh"
+shell_in     = "scripts/shell.sh"
+advance      = "scripts/advance.sh"
+reset        = "scripts/reset.sh"
+teardown     = "scripts/teardown.sh"
+open_handout = "scripts/handout.sh"

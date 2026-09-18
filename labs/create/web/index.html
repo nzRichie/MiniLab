@@ -1,0 +1,59 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MiniLabs create mode</title>
+<link rel="stylesheet" href="assets/app.css">
+
+<!--
+  The canvas.
+
+  Plain ES modules and inline SVG, with no build step and no node_modules: the
+  editor image is Alpine plus one static binary plus these files, and a release
+  builds with cargo alone. Every path here is relative to this page, so each one
+  already carries the token in the address bar and nothing in the page holds it.
+-->
+
+<div id="app" class="app">
+  <header class="topbar">
+    <button id="menu-projects" class="linkish" title="Projects (g p)">Sandboxes</button>
+    <span class="sep"></span>
+    <strong id="project-name">no project</strong>
+    <button id="breadcrumb" class="linkish crumb" hidden></button>
+    <span id="dirty" class="dirty" hidden>unsaved</span>
+    <span id="unreviewed" class="badge warn" hidden>not reviewed</span>
+    <span class="spacer"></span>
+    <button id="btn-undo" title="Undo (Ctrl+Z)">Undo</button>
+    <button id="btn-redo" title="Redo (Ctrl+Shift+Z)">Redo</button>
+    <button id="btn-layout" title="Lay out automatically (l)">Auto layout</button>
+    <button id="btn-save">Save</button>
+    <button id="btn-version" title="Save a version">Save version</button>
+    <button id="btn-emit" class="primary" title="Write the spawnable package (e)">Emit</button>
+    <button id="btn-palette" title="Commands (Ctrl+K)">⌘K</button>
+  </header>
+
+  <aside class="palette" id="preset-palette">
+    <h2>Add a node</h2>
+    <div id="preset-list"></div>
+    <h2>Scopes</h2>
+    <div id="scope-list"></div>
+    <h2>Blueprints</h2>
+    <div id="blueprint-list"></div>
+  </aside>
+
+  <main class="canvas-wrap">
+    <svg id="canvas" tabindex="0" aria-label="topology canvas"></svg>
+    <div id="hint" class="hint"></div>
+  </main>
+
+  <aside class="inspector" id="inspector"></aside>
+
+  <footer class="statusbar">
+    <div class="findings" id="findings"></div>
+    <div class="footprint" id="footprint"></div>
+  </footer>
+</div>
+
+<div id="modal-host" class="modal-host" hidden></div>
+<div id="toast" class="toast" hidden></div>
+
+<script type="module" src="assets/js/app.js"></script>

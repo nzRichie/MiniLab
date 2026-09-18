@@ -1,0 +1,375 @@
+/* The editor's own styles. One file, no framework, no build step.
+ *
+ * The node colours and shapes are topofig.py's, so a topology on the canvas and
+ * the same topology in a handout figure read as the same drawing: stroke carries
+ * the role, shape carries it again for anyone who cannot separate the hues, and
+ * "host" is deliberately grey because a plain host has no role to signal. */
+
+:root {
+  color-scheme: light dark;
+  --bg: #fbfbfa;
+  --panel: #ffffff;
+  --ink: #1c1c1a;
+  --muted: #5f5e5a;
+  --line: #d8d7d2;
+  --accent: #2a78d6;
+  --error: #e34948;
+  --warn: #eda100;
+  --ok: #1baf7a;
+  --router: #2a78d6;
+  --switch: #1baf7a;
+  --attacker: #e34948;
+  --victim: #eda100;
+  --server: #4a3aa7;
+  --host: #52514e;
+  --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #16171a;
+    --panel: #1e2024;
+    --ink: #ecebe8;
+    --muted: #a3a29d;
+    --line: #34363b;
+  }
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  height: 100%;
+  background: var(--bg);
+  color: var(--ink);
+  font: 14px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+.app {
+  display: grid;
+  grid-template-columns: 210px 1fr 320px;
+  grid-template-rows: auto 1fr auto;
+  grid-template-areas:
+    "top top top"
+    "palette canvas inspector"
+    "status status status";
+  height: 100vh;
+}
+
+/* -------------------------------------------------------------- top bar */
+
+.topbar {
+  grid-area: top;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--line);
+  background: var(--panel);
+}
+
+.topbar .spacer { flex: 1; }
+.topbar .sep { width: 1px; height: 18px; background: var(--line); }
+
+button {
+  font: inherit;
+  color: var(--ink);
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 4px 10px;
+  cursor: pointer;
+}
+
+button:hover:not(:disabled) { border-color: var(--accent); }
+button:disabled { opacity: 0.45; cursor: default; }
+button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+button.danger { border-color: var(--error); color: var(--error); }
+button.linkish { border: none; background: none; padding: 4px 6px; }
+
+.dirty { color: var(--muted); font-size: 12px; }
+.crumb { color: var(--accent); font-size: 12px; }
+
+.badge {
+  font-size: 11px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  border: 1px solid currentColor;
+}
+
+.badge.warn { color: var(--warn); }
+
+/* ------------------------------------------------------------- palette */
+
+.palette {
+  grid-area: palette;
+  border-right: 1px solid var(--line);
+  background: var(--panel);
+  overflow-y: auto;
+  padding: 10px;
+}
+
+.palette h2 {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  margin: 12px 0 6px;
+}
+
+.preset {
+  display: block;
+  width: 100%;
+  text-align: left;
+  margin-bottom: 4px;
+  padding: 6px 8px;
+}
+
+.preset .name { font-weight: 600; }
+.preset .summary { display: block; font-size: 11px; color: var(--muted); }
+
+.scope-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 6px;
+  padding: 4px 6px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.scope-row:hover { background: rgba(128, 128, 128, 0.12); }
+.scope-row .sub { font-family: var(--mono); font-size: 11px; color: var(--muted); }
+
+/* -------------------------------------------------------------- canvas */
+
+.canvas-wrap { grid-area: canvas; position: relative; overflow: hidden; }
+#canvas { width: 100%; height: 100%; display: block; outline: none; cursor: default; }
+#canvas.linking { cursor: crosshair; }
+
+.hint {
+  position: absolute;
+  left: 12px;
+  bottom: 10px;
+  font-size: 12px;
+  color: var(--muted);
+  pointer-events: none;
+}
+
+.node-body { stroke-width: 2px; }
+.node-label { font-size: 12px; font-weight: 600; pointer-events: none; }
+.node-legend { font-size: 10px; fill: var(--muted); pointer-events: none; }
+.node.selected .node-body { stroke-width: 3.5px; }
+.node.selected .halo { stroke: var(--accent); stroke-width: 2px; fill: none; stroke-dasharray: 4 3; }
+
+.port { fill: var(--panel); stroke: var(--muted); stroke-width: 1.5px; cursor: crosshair; }
+/* A border port is what a link from outside lands on when the scope is drawn
+ * collapsed, so it is drawn as something you can aim at. */
+.port.border { stroke: var(--accent); stroke-width: 2.5px; }
+.port.taken { fill: var(--muted); }
+.port:hover { stroke: var(--accent); stroke-width: 2.5px; }
+.port-label { font-family: var(--mono); font-size: 9px; fill: var(--muted); pointer-events: none; }
+
+.link { stroke: var(--muted); stroke-width: 2px; fill: none; }
+.link.l3p2p { stroke-dasharray: none; stroke: var(--router); }
+.link.trunk { stroke-width: 3.5px; stroke: var(--switch); }
+.link.selected { stroke: var(--accent); stroke-width: 4px; }
+.link-hit { stroke: transparent; stroke-width: 14px; fill: none; cursor: pointer; }
+.link-label { font-family: var(--mono); font-size: 9px; fill: var(--muted); pointer-events: none; }
+
+.raw-mark { font-size: 10px; font-weight: 700; fill: var(--warn); pointer-events: none; }
+.flagged .node-body { stroke-dasharray: 5 3; }
+
+/* A collapsed scope: one box, dashed, because what it stands for is not one
+ * container but several. */
+.scope-body {
+  fill: color-mix(in srgb, var(--accent) 8%, var(--panel));
+  stroke: var(--accent);
+  stroke-width: 2px;
+  stroke-dasharray: 7 4;
+}
+
+.scope-node.selected .scope-body { stroke-width: 3.5px; stroke-dasharray: none; }
+.link.stub { stroke-dasharray: 6 4; }
+
+.rubber { fill: rgba(42, 120, 214, 0.12); stroke: var(--accent); stroke-dasharray: 4 3; }
+.draft-link { stroke: var(--accent); stroke-width: 2px; stroke-dasharray: 5 4; fill: none; }
+
+/* ----------------------------------------------------------- inspector */
+
+.inspector {
+  grid-area: inspector;
+  border-left: 1px solid var(--line);
+  background: var(--panel);
+  overflow-y: auto;
+  padding: 12px;
+}
+
+.inspector h2 { font-size: 13px; margin: 0 0 8px; }
+.inspector h3 {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  margin: 14px 0 6px;
+}
+
+.field { margin-bottom: 8px; }
+.field label { display: block; font-size: 11px; color: var(--muted); margin-bottom: 2px; }
+
+input[type="text"], input[type="number"], select, textarea {
+  font: inherit;
+  width: 100%;
+  padding: 4px 6px;
+  color: var(--ink);
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 5px;
+}
+
+textarea { font-family: var(--mono); font-size: 12px; min-height: 70px; resize: vertical; }
+input.mono { font-family: var(--mono); }
+
+.iface {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 8px;
+  margin-bottom: 8px;
+}
+
+.iface .head { display: flex; justify-content: space-between; align-items: center; gap: 6px; }
+.iface .head code { font-family: var(--mono); font-size: 12px; }
+.pin { font-size: 11px; color: var(--muted); }
+.pin.on { color: var(--accent); }
+
+details.advanced { margin-top: 12px; border-top: 1px solid var(--line); padding-top: 8px; }
+details.advanced summary { cursor: pointer; font-size: 12px; color: var(--muted); }
+
+.row { display: flex; gap: 6px; }
+.row > * { flex: 1; }
+.empty { color: var(--muted); font-size: 12px; }
+
+/* ---------------------------------------------------------- status bar */
+
+.statusbar {
+  grid-area: status;
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+  border-top: 1px solid var(--line);
+  background: var(--panel);
+  padding: 6px 12px;
+  max-height: 170px;
+}
+
+.findings { flex: 1; overflow-y: auto; max-height: 158px; }
+
+.finding {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  padding: 2px 4px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.finding:hover { background: rgba(128, 128, 128, 0.12); }
+.finding .sev { font-weight: 700; font-size: 10px; text-transform: uppercase; }
+.finding.error .sev { color: var(--error); }
+.finding.warning .sev { color: var(--warn); }
+.finding .kind { font-family: var(--mono); font-size: 10px; color: var(--muted); }
+
+.footprint { font-size: 12px; color: var(--muted); text-align: right; min-width: 220px; }
+.footprint b { color: var(--ink); }
+.footprint .over { color: var(--error); }
+
+/* --------------------------------------------------------------- modal */
+
+/* `display: flex` beats the browser's own `[hidden] { display: none }`, so a
+ * hidden overlay that sets one stays laid out: a fixed, inset-0 box over the
+ * whole page, swallowing every click meant for the canvas. The rule below is
+ * what keeps the editor usable when no dialog is open. */
+.modal-host[hidden] { display: none; }
+
+.modal-host {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 8vh 16px;
+  z-index: 20;
+}
+
+.modal {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  width: min(760px, 100%);
+  max-height: 80vh;
+  overflow-y: auto;
+  padding: 16px;
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.28);
+}
+
+.modal h2 { margin: 0 0 6px; font-size: 16px; }
+.modal p { color: var(--muted); margin: 4px 0 12px; }
+.modal .actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; }
+
+.list { border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+
+.list-row {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--line);
+  cursor: pointer;
+}
+
+.list-row:last-child { border-bottom: none; }
+.list-row:hover, .list-row.active { background: rgba(42, 120, 214, 0.10); }
+.list-row .grow { flex: 1; }
+.list-row .meta { font-size: 11px; color: var(--muted); }
+
+pre.code {
+  font-family: var(--mono);
+  font-size: 12px;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 8px;
+  overflow-x: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.review-item { margin-bottom: 10px; }
+.review-item .what { font-size: 11px; font-family: var(--mono); color: var(--warn); }
+
+/* --------------------------------------------------------------- toast */
+
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: 24px;
+  transform: translateX(-50%);
+  background: var(--ink);
+  color: var(--bg);
+  padding: 8px 14px;
+  border-radius: 8px;
+  font-size: 13px;
+  z-index: 30;
+  max-width: 70vw;
+}
+
+.toast.bad { background: var(--error); color: #fff; }
+
+/* A narrow window is a lab machine over a forwarded port, which is the case the
+ * design says to expect. The side panels fold away rather than squeezing the
+ * canvas to nothing. */
+@media (max-width: 900px) {
+  .app { grid-template-columns: 1fr; grid-template-areas: "top" "canvas" "status"; }
+  .palette, .inspector { display: none; }
+}

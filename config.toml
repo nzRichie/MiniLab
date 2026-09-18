@@ -518,6 +518,35 @@ title = "Layer 3 and 4 attacks and mitigations"
     script = "labs/bgp-hijacking/scripts/handout.sh"
 
   [[items.items]]
+  title = "Certificate hijacking with BGP"
+
+    [[items.items.items]]
+    title = "Spawn"
+    script = "labs/certificate-hijacking/scripts/spawn.sh"
+
+    [[items.items.items]]
+    title = "Status"
+    script = "labs/certificate-hijacking/scripts/status.sh"
+    hold = true
+
+    [[items.items.items]]
+    title = "Shell command for a node"
+    script = "labs/certificate-hijacking/scripts/shell.sh"
+    hold = true
+
+    [[items.items.items]]
+    title = "Reset to baseline"
+    script = "labs/certificate-hijacking/scripts/reset.sh"
+
+    [[items.items.items]]
+    title = "Teardown"
+    script = "labs/certificate-hijacking/scripts/teardown.sh"
+
+    [[items.items.items]]
+    title = "Open handout"
+    script = "labs/certificate-hijacking/scripts/handout.sh"
+
+  [[items.items]]
   title = "Firewalling and intrusion detection with Suricata"
 
     [[items.items.items]]
@@ -546,6 +575,39 @@ title = "Layer 3 and 4 attacks and mitigations"
     title = "Open handout"
     script = "labs/intrusion-detection/scripts/handout.sh"
 
+  [[items.items]]
+  title = "Botnet recruitment, tasking and containment"
+
+    [[items.items.items]]
+    title = "Spawn"
+    script = "labs/botnet/scripts/spawn.sh"
+
+    [[items.items.items]]
+    title = "Status"
+    script = "labs/botnet/scripts/status.sh"
+    hold = true
+
+    [[items.items.items]]
+    title = "Shell command for a node"
+    script = "labs/botnet/scripts/shell.sh"
+    hold = true
+
+    [[items.items.items]]
+    title = "Advance the population"
+    script = "labs/botnet/scripts/advance.sh"
+    hold = true
+
+    [[items.items.items]]
+    title = "Reset to baseline"
+    script = "labs/botnet/scripts/reset.sh"
+
+    [[items.items.items]]
+    title = "Teardown"
+    script = "labs/botnet/scripts/teardown.sh"
+
+    [[items.items.items]]
+    title = "Open handout"
+    script = "labs/botnet/scripts/handout.sh"
 [[items]]
 title = "Application layer attacks and mitigations"
 
@@ -911,3 +973,92 @@ title = "Practice ranges"
     [[items.items.items]]
     title = "Open handout"
     script = "labs/scanning-range/scripts/handout.sh"
+
+[[items]]
+title = "Create mode"
+
+  [[items.items]]
+  title = "Start editor"
+  script = "labs/create/scripts/start.sh"
+  hold = true
+
+  [[items.items]]
+  title = "Start editor with Docker access"
+  script = "labs/create/scripts/start-live.sh"
+  hold = true
+
+    [[items.items.args]]
+    name = "confirm"
+    prompt = "Give it Docker?"
+
+      [[items.items.args.options]]
+      value = "no"
+      follow_up = []
+
+      [[items.items.args.options]]
+      value = "yes"
+      follow_up = []
+
+  [[items.items]]
+  title = "Editor status and URL"
+  script = "labs/create/scripts/status.sh"
+  hold = true
+
+  [[items.items]]
+  title = "Stop editor"
+  script = "labs/create/scripts/stop.sh"
+
+  [[items.items]]
+  title = "Prune sandbox images"
+  script = "labs/create/scripts/prune-images.sh"
+  hold = true
+
+[[items]]
+title = "Sandboxes"
+
+  [[items.items]]
+  title = "List sandboxes"
+  script = "labs/create/scripts/sb-list.sh"
+  hold = true
+
+  [[items.items]]
+  title = "Spawn"
+  script = "labs/create/scripts/sb-spawn.sh"
+
+    [[items.items.args]]
+    name = "sandbox"
+    prompt = "Sandbox name?"
+
+  [[items.items]]
+  title = "Status"
+  script = "labs/create/scripts/sb-status.sh"
+  hold = true
+
+    [[items.items.args]]
+    name = "sandbox"
+    prompt = "Sandbox name?"
+
+  [[items.items]]
+  title = "Shell command for a node"
+  script = "labs/create/scripts/sb-shell.sh"
+  hold = true
+
+    [[items.items.args]]
+    name = "sandbox"
+    prompt = "Sandbox name?"
+
+  [[items.items]]
+  title = "Reset to baseline"
+  script = "labs/create/scripts/sb-reset.sh"
+
+    [[items.items.args]]
+    name = "sandbox"
+    prompt = "Sandbox name?"
+
+  [[items.items]]
+  title = "Teardown"
+  script = "labs/create/scripts/sb-teardown.sh"
+
+    [[items.items.args]]
+    name = "sandbox"
+    prompt = "Sandbox name?"
