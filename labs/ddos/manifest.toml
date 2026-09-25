@@ -1,0 +1,73 @@
+title     = "Denial of service: floods, state and cost"
+layer     = "L4"
+summary   = "A victim behind a 1 Mbit/s down, 256 kbit/s up access link, four flood sources driven from a console over SSH, and two ordinary servers on the same segment as the sources. Fill the victim's downlink with DNS replies it never asked for, watch strict source-address verification at its own edge report nothing while the bottleneck discards most of what arrives, then blackhole two addresses and get the service back. Fill its connection queue with SYNs from genuine addresses instead, and watch the web service fail while the link stays idle; then turn syncookies on and measure what the half-open count does. Then ask it 360 questions a second that no cache can absorb, until the victim's own signed denials fill its uplink and every mitigation already built does nothing, leaving one move: price the class of reply the attack produces."
+images    = ["d_host_ddos", "miniinterneteth/d_switch"]
+handout   = "handout.pdf"
+
+# Three legs meeting at one router, each on its own switch. Two token buckets
+# hang off the router and they are what makes the lab measurable: 1 Mbit/s on the
+# inside egress meters everything arriving for the victim, 256 kbit/s on the field
+# egress meters everything the victim sends out. A qdisc shapes only what LEAVES
+# the interface it is on, which is why the measuring host sits on the field leg
+# and not beside the victim: an inside host talking to the victim never crosses
+# the bottleneck at all.
+#
+# The uplink burst is 16kbit (2000 bytes) and not less. A token bucket's burst is
+# its bucket size and a packet larger than the bucket is dropped rather than
+# delayed, so a burst under the 1500-byte MTU blackholes every full-size packet
+# on that interface. The symptom is not a slow link: it is an SSH connection from
+# the console that hangs in key exchange while ping and dig both work.
+#
+# The two reflectors sit on the same segment as the four sources on purpose. A
+# spoofed query never crosses the router, so everything the victim's network sees
+# is reply traffic from two well-behaved servers with genuine source addresses.
+[topology]
+
+  [topology.inside]
+  subnet  = "129.0.0.0/24"
+  gateway = "129_L4_LAB_router = 129.0.0.1"
+  switch  = "129_L4_LAB_S1, one Open vSwitch bridge, no STP, no VLANs"
+  hosts   = [ "129_L4_LAB_server = 129.0.0.20" ]
+  role    = "the victim, attacked at three layers from one address: lighttpd on tcp/80 with a 128-deep listen backlog, iperf3 on tcp/5201, and BIND 9.18 authoritative for the signed zone lab. on udp/53. It boots undefended: tcp_syncookies 0, tcp_max_syn_backlog 32, no rate limit"
+  note    = "net.ipv4.tcp_no_metrics_save=1 is set at docker run and is not tuning: the kernel exempts a peer it holds TCP metrics for from the pre-emptive SYN drop, the admin's own probe makes the admin such a peer, and the SYN flood would deny service to nobody. ip tcp_metrics flush is not an alternative, because it returns EPERM under a rootless daemon."
+
+  [topology.field]
+  subnet  = "129.1.0.0/24"
+  gateway = "129_L4_LAB_router = 129.1.0.1"
+  switch  = "129_L4_LAB_S2, one Open vSwitch bridge, no STP, no VLANs"
+  hosts   = [
+    "129_L4_LAB_host1 = 129.1.0.42",
+    "129_L4_LAB_host2 = 129.1.0.13",
+    "129_L4_LAB_host3 = 129.1.0.68",
+    "129_L4_LAB_host4 = 129.1.0.27",
+    "129_L4_LAB_host5 = 129.1.0.88",
+    "129_L4_LAB_host6 = 129.1.0.53",
+    "129_L4_LAB_admin = 129.1.0.77",
+  ]
+  role    = "host1 to host4 are the four flood sources, driven from the console over SSH with the root password Riverbed-2021; host5 is the DNS reflector (dnsmasq 2.90 serving amplify.lab plus the real TXT record sets of google.com, spotify.com and amazon.com, with edns-packet-max=4096, and a web page on tcp/80 so TCP can be compared as a reflector too); host6 is the NTP reflector (ntpsec 1.2.3 answering mode-6 control queries from 129.0.0.0/8); admin is the measurement, and runs `probe`"
+
+  [topology.operator]
+  subnet  = "129.2.0.0/24"
+  gateway = "129_L4_LAB_router = 129.2.0.1"
+  switch  = "129_L4_LAB_S3, one Open vSwitch bridge, no STP, no VLANs"
+  hosts   = [
+    "129_L4_LAB_c2 = 129.2.0.10",
+    "129_L4_LAB_loader = 129.2.0.40",
+  ]
+  role    = "the console every flood is started from, and the file host serving the flood tool's source text over tcp/80 so a learner can read exactly what one of its packets is"
+
+  [topology.bottleneck]
+  downlink = "tbf rate 1mbit burst 32kbit latency 50ms on the router's 129-S1 (toward the victim)"
+  uplink   = "tbf rate 256kbit burst 16kbit latency 50ms on the router's 129-S2 (away from the victim)"
+  note     = "tc qdisc replace does NOT zero a qdisc's statistics; tc qdisc del then add does. Every drop count the handout asks for is read from a counter zeroed that way, and reset.sh re-applies default_config/router.sh, which deletes and re-adds both."
+
+# Lifecycle actions map one-to-one to wrapper scripts, matching miniManager's
+# item-to-script contract (arguments pass positionally). Paths are relative to
+# this lab directory.
+[actions]
+spawn        = "scripts/spawn.sh"
+status       = "scripts/status.sh"
+shell_in     = "scripts/shell.sh"
+reset        = "scripts/reset.sh"
+teardown     = "scripts/teardown.sh"
+open_handout = "scripts/handout.sh"

@@ -1,0 +1,139 @@
+#!/bin/sh
+# probe - the admin workstation's measurement, and the only instrument in this
+# lab that is not an attack.
+#
+# Four measurements, which are the four columns of the oracle table:
+#
+#   iperf   a 5-second UDP stream at 900 kbit/s, which is 90 % of the downlink.
+#           Reports the rate the receiver got and the loss it saw.
+#   web     ten fetches of the victim's page, counting the ones that returned 200.
+#   dig     ten lookups of a name that exists, counting the ones that answered.
+#   ping    twenty ICMP echoes, reporting the average round trip and the loss.
+#
+# Each one prints the command it is about to run before running it, because the
+# numbers only mean something if you can see what produced them. Nothing here is
+# clever: it is iperf3, curl, dig and ping.
+#
+# Every run writes one line per measurement into a state file, so the lab's
+# Status action can report what the network did for the admin while somebody was
+# typing, rather than opening a connection of its own and reporting now.
+#
+# There is no default target: every run names the victim.
+set -u
+
+STATE="/var/lib/minilabs/probe.state"
+IPERF_RATE="900k"
+IPERF_SECS=5
+WEB_TRIES=10
+DIG_TRIES=10
+PING_COUNT=20
+PING_INTERVAL="0.2"
+
+TARGET=""
+NAME=""
+WHAT=""
+
+usage() {
+    cat <<USAGE
+usage: probe --target <address> [--name <dns name>] <all|iperf|web|dig|ping>
+
+  --target  the machine to measure (no default)
+  --name    a DNS name that exists on it, for the dig measurement
+USAGE
+    exit 2
+}
+
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --target) TARGET="${2:-}"; shift 2 ;;
+        --name)   NAME="${2:-}"; shift 2 ;;
+        -h|--help) usage ;;
+        all|iperf|web|dig|ping) WHAT="$1"; shift ;;
+        *) echo "unknown argument: $1" >&2; usage ;;
+    esac
+done
+
+[ -n "$TARGET" ] || { echo "probe: --target is required" >&2; usage; }
+[ -n "$WHAT" ] || WHAT="all"
+
+mkdir -p "$( dirname "$STATE" )"
+touch "$STATE"
+chmod 644 "$STATE"
+
+record() {   # <key> <field...>
+    key="$1"; shift
+    tmp="${STATE}.tmp"
+    grep -v "^${key} " "$STATE" 2>/dev/null > "$tmp" || true
+    printf '%s %s %s\n' "$key" "$( date +%s )" "$*" >> "$tmp"
+    mv "$tmp" "$STATE"
+    chmod 644 "$STATE"
+}
+
+show() { echo "  \$ $*"; }
+
+do_iperf() {
+    show "iperf3 -c $TARGET -u -b $IPERF_RATE -t $IPERF_SECS -f k"
+    out="$( iperf3 -c "$TARGET" -u -b "$IPERF_RATE" -t "$IPERF_SECS" -f k 2>&1 )"
+    line="$( printf '%s\n' "$out" | grep receiver | tail -1 )"
+    if [ -z "$line" ]; then
+        echo "  no receiver report: the stream did not complete"
+        printf '%s\n' "$out" | tail -3 | sed 's/^/    /'
+        record iperf 0 100
+        return
+    fi
+    kbit="$( printf '%s\n' "$line" | awk '{ for (i=1;i<=NF;i++) if ($i == "Kbits/sec") print $(i-1) }' )"
+    loss="$( printf '%s\n' "$line" | grep -o '([0-9.]*%)' | tr -d '()%' )"
+    printf '%s\n' "$line" | sed 's/^/    /'
+    record iperf "${kbit:-0}" "${loss:-100}"
+}
+
+do_web() {
+    show "for i in \$(seq 1 $WEB_TRIES); do curl -s -o /dev/null -w '%{http_code}' --max-time 3 http://$TARGET/; done"
+    ok=0
+    i=0
+    while [ "$i" -lt "$WEB_TRIES" ]; do
+        code="$( curl -s -o /dev/null -w '%{http_code}' --max-time 3 "http://$TARGET/" 2>/dev/null )"
+        [ "$code" = "200" ] && ok=$(( ok + 1 ))
+        i=$(( i + 1 ))
+    done
+    echo "    web: $ok/$WEB_TRIES fetches returned 200"
+    record web "$ok" "$WEB_TRIES"
+}
+
+do_dig() {
+    [ -n "$NAME" ] || { echo "probe: --name is required for the dig measurement" >&2; exit 2; }
+    show "for i in \$(seq 1 $DIG_TRIES); do dig +short +time=2 +tries=1 @$TARGET $NAME A; done"
+    ok=0
+    i=0
+    while [ "$i" -lt "$DIG_TRIES" ]; do
+        ans="$( dig +short +time=2 +tries=1 "@$TARGET" "$NAME" A 2>/dev/null )"
+        printf '%s' "$ans" | grep -q '[0-9]' && ok=$(( ok + 1 ))
+        i=$(( i + 1 ))
+    done
+    echo "    dig: $ok/$DIG_TRIES lookups of $NAME answered"
+    record dig "$ok" "$DIG_TRIES"
+}
+
+do_ping() {
+    show "ping -c $PING_COUNT -i $PING_INTERVAL -W 1 $TARGET"
+    out="$( ping -c "$PING_COUNT" -i "$PING_INTERVAL" -W 1 "$TARGET" 2>&1 )"
+    loss="$( printf '%s\n' "$out" | grep -o '[0-9]*% packet loss' | tr -d '%' | awk '{ print $1 }' )"
+    # The summary line is either "rtt min/avg/max/mdev = a/b/c/d ms" or
+    # "round-trip min/avg/max = a/b/c ms" depending on whose ping this is. Both
+    # put the average second in the list after the equals sign.
+    rtt="$( printf '%s\n' "$out" | awk -F' = ' '/min\/avg\/max/ { split($2, a, "/"); print a[2] }' )"
+    printf '%s\n' "$out" | tail -2 | sed 's/^/    /'
+    record ping "${rtt:-na}" "${loss:-100}"
+}
+
+case "$WHAT" in
+    all)   do_iperf; do_web; do_dig; do_ping ;;
+    iperf) do_iperf ;;
+    web)   do_web ;;
+    dig)   do_dig ;;
+    ping)  do_ping ;;
+esac
+
+echo
+echo "  last reading of each measurement ($STATE):"
+sed 's/^/    /' "$STATE"

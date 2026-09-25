@@ -518,35 +518,6 @@ title = "Layer 3 and 4 attacks and mitigations"
     script = "labs/bgp-hijacking/scripts/handout.sh"
 
   [[items.items]]
-  title = "Certificate hijacking with BGP"
-
-    [[items.items.items]]
-    title = "Spawn"
-    script = "labs/certificate-hijacking/scripts/spawn.sh"
-
-    [[items.items.items]]
-    title = "Status"
-    script = "labs/certificate-hijacking/scripts/status.sh"
-    hold = true
-
-    [[items.items.items]]
-    title = "Shell command for a node"
-    script = "labs/certificate-hijacking/scripts/shell.sh"
-    hold = true
-
-    [[items.items.items]]
-    title = "Reset to baseline"
-    script = "labs/certificate-hijacking/scripts/reset.sh"
-
-    [[items.items.items]]
-    title = "Teardown"
-    script = "labs/certificate-hijacking/scripts/teardown.sh"
-
-    [[items.items.items]]
-    title = "Open handout"
-    script = "labs/certificate-hijacking/scripts/handout.sh"
-
-  [[items.items]]
   title = "Firewalling and intrusion detection with Suricata"
 
     [[items.items.items]]
@@ -574,6 +545,35 @@ title = "Layer 3 and 4 attacks and mitigations"
     [[items.items.items]]
     title = "Open handout"
     script = "labs/intrusion-detection/scripts/handout.sh"
+
+  [[items.items]]
+  title = "Denial of service: floods, state and cost"
+
+    [[items.items.items]]
+    title = "Spawn"
+    script = "labs/ddos/scripts/spawn.sh"
+
+    [[items.items.items]]
+    title = "Status"
+    script = "labs/ddos/scripts/status.sh"
+    hold = true
+
+    [[items.items.items]]
+    title = "Shell command for a node"
+    script = "labs/ddos/scripts/shell.sh"
+    hold = true
+
+    [[items.items.items]]
+    title = "Reset to baseline"
+    script = "labs/ddos/scripts/reset.sh"
+
+    [[items.items.items]]
+    title = "Teardown"
+    script = "labs/ddos/scripts/teardown.sh"
+
+    [[items.items.items]]
+    title = "Open handout"
+    script = "labs/ddos/scripts/handout.sh"
 
   [[items.items]]
   title = "Botnet recruitment, tasking and containment"
@@ -608,6 +608,7 @@ title = "Layer 3 and 4 attacks and mitigations"
     [[items.items.items]]
     title = "Open handout"
     script = "labs/botnet/scripts/handout.sh"
+
 [[items]]
 title = "Application layer attacks and mitigations"
 

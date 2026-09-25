@@ -130,15 +130,35 @@ button.linkish { border: none; background: none; padding: 4px 6px; }
 
 .scope-row {
   display: flex;
-  justify-content: space-between;
+  align-items: center;
   gap: 6px;
   padding: 4px 6px;
   border-radius: 6px;
   cursor: pointer;
 }
 
+.scope-row > span:first-child { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .scope-row:hover { background: rgba(128, 128, 128, 0.12); }
-.scope-row .sub { font-family: var(--mono); font-size: 11px; color: var(--muted); }
+.scope-row .sub { font-family: var(--mono); font-size: 11px; color: var(--muted); flex: 0 0 auto; }
+
+/* The collapse toggle on a scope row. Always present rather than shown on
+ * hover: a control that appears only under the pointer is one a user has to
+ * already know about. */
+.scope-toggle {
+  flex: 0 0 auto;
+  padding: 0 5px;
+  min-width: 22px;
+  line-height: 18px;
+  font-size: 12px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.scope-toggle:hover { border-color: var(--accent); color: var(--accent); }
+.scope-toggle.on { border-color: var(--accent); color: var(--accent); background: rgba(42, 120, 214, 0.12); }
 
 /* -------------------------------------------------------------- canvas */
 
@@ -179,6 +199,53 @@ button.linkish { border: none; background: none; padding: 4px 6px; }
 .raw-mark { font-size: 10px; font-weight: 700; fill: var(--warn); pointer-events: none; }
 .flagged .node-body { stroke-dasharray: 5 3; }
 
+/* An open scope: the region its nodes sit in. Tinted rather than outlined hard,
+ * because it is a background and the nodes on top of it are the subject. The
+ * body takes no pointer events so a rubber band can start inside an AS. */
+.scope-region .region-body {
+  fill: hsl(var(--scope-hue) 70% 50% / 0.07);
+  stroke: hsl(var(--scope-hue) 55% 45% / 0.55);
+  stroke-width: 1.5px;
+  stroke-dasharray: 3 5;
+  pointer-events: none;
+}
+
+.scope-region.selected .region-body {
+  fill: hsl(var(--scope-hue) 70% 50% / 0.14);
+  stroke-width: 2.5px;
+  stroke-dasharray: none;
+}
+
+.region-chip {
+  fill: color-mix(in srgb, hsl(var(--scope-hue) 60% 50%) 16%, var(--bg));
+  stroke: hsl(var(--scope-hue) 55% 45% / 0.45);
+  stroke-width: 1px;
+}
+
+.region-name {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  fill: hsl(var(--scope-hue) 45% 38%);
+}
+
+@media (prefers-color-scheme: dark) {
+  .region-name { fill: hsl(var(--scope-hue) 55% 68%); }
+}
+
+.region-label { cursor: pointer; }
+.region-label:hover .region-name { text-decoration: underline; }
+
+.region-collapse { cursor: pointer; }
+.region-collapse-hit { fill: transparent; stroke: transparent; }
+.region-collapse-mark {
+  font-size: 14px;
+  fill: var(--muted);
+  pointer-events: none;
+}
+.region-collapse:hover .region-collapse-hit { fill: var(--panel); stroke: var(--line); }
+.region-collapse:hover .region-collapse-mark { fill: var(--accent); }
+
 /* A collapsed scope: one box, dashed, because what it stands for is not one
  * container but several. */
 .scope-body {
@@ -191,8 +258,23 @@ button.linkish { border: none; background: none; padding: 4px 6px; }
 .scope-node.selected .scope-body { stroke-width: 3.5px; stroke-dasharray: none; }
 .link.stub { stroke-dasharray: 6 4; }
 
-.rubber { fill: rgba(42, 120, 214, 0.12); stroke: var(--accent); stroke-dasharray: 4 3; }
-.draft-link { stroke: var(--accent); stroke-width: 2px; stroke-dasharray: 5 4; fill: none; }
+/* The two drag overlays. Both take no pointer events: the draft link ends
+ * exactly under the cursor, so without this the drop hit-tests the feedback
+ * line instead of the port being dropped on and the link is silently lost. */
+.rubber {
+  fill: rgba(42, 120, 214, 0.12);
+  stroke: var(--accent);
+  stroke-dasharray: 4 3;
+  pointer-events: none;
+}
+
+.draft-link {
+  stroke: var(--accent);
+  stroke-width: 2px;
+  stroke-dasharray: 5 4;
+  fill: none;
+  pointer-events: none;
+}
 
 /* ----------------------------------------------------------- inspector */
 

@@ -28,6 +28,26 @@ export class Blueprints {
   /// pre-filled with what this scope has, and the user unticks what should stay
   /// fixed.
   async saveBlueprint(scope) {
+    // A blueprint with no border port cannot take an inter-AS link: promoted
+    // ports are the only thing a pull keeps, so every instance of it would have
+    // to have one promoted by hand before it could be wired to anything. Said
+    // before the blueprint is written, where the fix is one click away, rather
+    // than discovered on the third instance.
+    const ports = this.ed
+      .nodesInScope(scope.id)
+      .flatMap((n) => (n.interfaces || []).filter((i) => i.external));
+    if (!ports.length) {
+      const go = await confirmAsk(
+        `${scope.name} has no border ports`,
+        'A border port is where a link from another AS lands, and it is the only thing that ' +
+          'survives a pull from a blueprint. Without one, an instance of this blueprint cannot ' +
+          'be wired to anything while it is drawn as one node. Select an interface inside the ' +
+          'scope and use "Make this a border port" first, or save it anyway.',
+        { ok: 'Save it anyway' },
+      );
+      if (!go) return;
+    }
+
     const suggestions = [
       { name: 'asn', description: 'the AS number', value: String(scope.asn), on: true },
       { name: 'subnet', description: 'the subnet', value: scope.subnet, on: false },
@@ -299,7 +319,12 @@ export class Blueprints {
       value: `${asn}.0.0.0/24`,
     });
     if (!subnet) return;
-    await this.ed.run({
+    // The nodes leave the scope that is being looked at, so an inside view would
+    // stop drawing every one of them the moment the group is made. Coming back
+    // out is the only way the new scope is visible at all.
+    const wasFocused = this.ed.focus;
+    if (wasFocused) this.ed.setFocus(null);
+    const res = await this.ed.run({
       op: 'group_into_scope',
       nodes,
       name,
@@ -307,6 +332,10 @@ export class Blueprints {
       subnet,
       template: `{asn}.0.0.{host}`,
     });
+    if (res && wasFocused) {
+      toast(`${nodes.length} node(s) moved into ${name}; showing the whole project`);
+    }
+    return res;
   }
 }
 

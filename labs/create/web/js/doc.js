@@ -95,6 +95,10 @@ export class Editor {
       res = await api.ops(this.doc, list);
     } catch (e) {
       this.emit('refused', e.message || String(e));
+      // Redraw from the document as it still stands, so a field that was
+      // refused goes back to the value the project actually holds rather than
+      // sitting there showing text the server rejected.
+      this.emit('changed', this);
       return null;
     }
     this.doc = normalise({ topology: res.topology, layout: res.layout });

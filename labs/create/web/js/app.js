@@ -27,6 +27,7 @@ const inspector = new Inspector(document.getElementById('inspector'), ed, {
   pushBlueprint: (scope) => blueprints.push(scope),
   groupIntoScope: (nodes) => blueprints.groupIntoScope(nodes),
   focusScope: (scope) => focusScope(scope),
+  setCollapsed: (scope, collapsed) => setCollapsed(scope, collapsed),
 });
 const findings = new Findings(document.getElementById('findings'), ed, selectSubject);
 const meter = new FootprintMeter(document.getElementById('footprint'), ed);
@@ -89,12 +90,27 @@ function renderPalettePanel() {
     const row = document.createElement('div');
     row.className = 'scope-row';
     const drift = ed.divergenceOf(s.id);
-    const marks = [
-      ed.isCollapsed(s.id) ? 'collapsed' : '',
-      drift && !drift.clean ? 'diverged' : '',
-    ].filter(Boolean);
+    const collapsed = ed.isCollapsed(s.id);
+    const marks = [drift && !drift.clean ? 'diverged' : ''].filter(Boolean);
+    const count = ed.nodesInScope(s.id).length;
     row.appendChild(el('span', s.name));
-    row.appendChild(el('span', marks.length ? `AS ${s.asn} · ${marks.join(' · ')}` : `AS ${s.asn}`, 'sub'));
+    row.appendChild(
+      el('span', marks.length ? `AS ${s.asn} · ${marks.join(' · ')}` : `AS ${s.asn}`, 'sub'),
+    );
+    // The toggle lives on the row because that is where a user looks for the
+    // list of ASes, and burying the only way to collapse one at the bottom of a
+    // scrolling inspector panel is what made the feature unfindable.
+    const toggle = document.createElement('button');
+    toggle.className = `scope-toggle${collapsed ? ' on' : ''}`;
+    toggle.textContent = collapsed ? '⊞' : '⊟';
+    toggle.title = collapsed
+      ? `Open ${s.name} up: draw its ${count} node(s) again`
+      : `Draw ${s.name} as one node`;
+    toggle.onclick = (ev) => {
+      ev.stopPropagation();
+      setCollapsed(s.id, !collapsed);
+    };
+    row.appendChild(toggle);
     row.onclick = () => {
       ed.select(s.id);
     };
@@ -129,6 +145,30 @@ function focusScope(id) {
   renderAll();
 }
 
+/// Draw a scope as one node, or open it up again.
+///
+/// Three things beyond the edit itself, and each one existed as a bug first.
+/// Collapsing is meaningless while a scope is being looked at from the inside,
+/// because the inside view draws no scope boxes at all, so the view comes back
+/// out first. The box is then brought into sight, because a box drawn where the
+/// nodes were is not necessarily where the canvas is pointing. And it says what
+/// it did, because the nodes vanishing is otherwise the only feedback.
+async function setCollapsed(id, collapsed) {
+  const scope = ed.scope(id);
+  if (!scope) return;
+  if (ed.focus) ed.setFocus(null);
+  await ed.run({ op: 'set_collapsed', scope: id, collapsed });
+  renderAll();
+  if (collapsed) {
+    canvas.reveal(canvas.scopeBox(scope));
+    toast(`${scope.name} is drawn as one node; its border ports are where a link lands`);
+  } else {
+    const box = canvas.regionBox(scope, ed.doc.topology.nodes);
+    if (box) canvas.reveal({ x: box.x + box.w / 2, y: box.y + box.h / 2, w: box.w, h: box.h });
+    toast(`${scope.name} is open; ${ed.nodesInScope(id).length} node(s) are back on the canvas`);
+  }
+}
+
 /// Re-read the project from the server, keeping the view.
 ///
 /// Used after an endpoint that writes files of its own: saving a blueprint
@@ -152,7 +192,13 @@ async function addNode(presetName) {
     return;
   }
   const pos = canvas.freeSpot();
-  await ed.run({ op: 'add_node', preset: presetName, pos });
+  // Into the scope being looked at, not into the project's first one. Without
+  // this, adding a node while inside an AS puts it in a different AS and the
+  // canvas does not draw it at all: the inspector fills with a node that is
+  // nowhere on screen.
+  const cmd = { op: 'add_node', preset: presetName, pos };
+  if (ed.focus) cmd.scope = ed.focus;
+  await ed.run(cmd);
 }
 
 async function addScope() {
@@ -186,6 +232,7 @@ async function requestLink(fromIface, toNode, toIface) {
 
 canvas.onRequestLink = requestLink;
 canvas.onOpenScope = (id) => focusScope(id);
+canvas.onCollapseScope = (id) => setCollapsed(id, !ed.isCollapsed(id));
 canvas.onDropOnScope = () => {
   toast(
     'drop the link on one of the scope\'s border ports, or open the scope and link to a node inside it',
@@ -423,7 +470,7 @@ function commandList() {
   for (const s of ed.doc?.topology.scopes || []) {
     cmds.push({
       label: `${ed.isCollapsed(s.id) ? 'Open' : 'Collapse'} the scope ${s.name}`,
-      run: () => ed.run({ op: 'set_collapsed', scope: s.id, collapsed: !ed.isCollapsed(s.id) }),
+      run: () => setCollapsed(s.id, !ed.isCollapsed(s.id)),
     });
     cmds.push({ label: `Look inside ${s.name}`, run: () => focusScope(s.id) });
     if (s.blueprint) {

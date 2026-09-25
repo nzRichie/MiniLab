@@ -31,6 +31,8 @@ const SCOPE_MIN_W = 150;
 const CHAR_W = 8.2;
 const STUB = 18;      // how far a link leaves a port before it turns
 const PORT_R = 5;
+const REGION_PAD = 30;      // how far a scope's region reaches past its nodes
+const REGION_LABEL_H = 22;  // the strip at the top the scope's name sits in
 
 export class Canvas {
   constructor(svg, editor) {
@@ -42,6 +44,7 @@ export class Canvas {
     this.onOpenNode = () => {};
     this.onOpenScope = () => {};
     this.onDropOnScope = () => {};
+    this.onCollapseScope = () => {};
     this.bind();
   }
 
@@ -213,8 +216,12 @@ export class Canvas {
     this.svg.appendChild(root);
     this.applyView();
 
+    // Three layers, bottom to top. The regions go under the links so a cable
+    // crossing an AS reads as crossing it rather than as ending at its edge.
+    const regionsLayer = el('g', {});
     const linksLayer = el('g', {});
     const nodesLayer = el('g', {});
+    root.appendChild(regionsLayer);
     root.appendChild(linksLayer);
     root.appendChild(nodesLayer);
     this.root = root;
@@ -229,7 +236,22 @@ export class Canvas {
     const visibleScopes = focus
       ? []
       : doc.topology.scopes.filter((s) => this.ed.isCollapsed(s.id));
+    // An open scope is drawn as the region its nodes sit in. Without it a scope
+    // has no form on the canvas at all until it is collapsed, and grouping a
+    // selection looks like it did nothing.
+    const openScopes = doc.topology.scopes.filter((s) =>
+      focus ? s.id === focus : !this.ed.isCollapsed(s.id),
+    );
 
+    // Biggest first, so a scope whose nodes sit inside another's span draws on
+    // top of it and stays readable. Two regions overlapping is a true statement
+    // about where the nodes are, not something to hide: the fix is to move the
+    // nodes, and the drawing should say so.
+    const regions = openScopes
+      .map((s) => ({ scope: s, box: this.regionBox(s, visibleNodes) }))
+      .filter((r) => r.box)
+      .sort((a, b) => b.box.w * b.box.h - a.box.w * a.box.h);
+    for (const r of regions) this.drawRegion(regionsLayer, r.scope, r.box);
     for (const link of doc.topology.links) this.drawLink(linksLayer, link);
     for (const scope of visibleScopes) this.drawScope(nodesLayer, scope);
     for (const node of visibleNodes) this.drawNode(nodesLayer, node);
@@ -349,6 +371,114 @@ export class Canvas {
         );
       }
     }
+
+    layer.appendChild(g);
+  }
+
+  /// The rectangle an open scope's nodes sit in, or null if it has none placed.
+  ///
+  /// Room is left at the top for the scope's own label, so the label never sits
+  /// on a node: a region is a container, and a container whose caption overlaps
+  /// its contents reads as another node.
+  regionBox(scope, nodes) {
+    const inside = nodes.filter((n) => n.scope === scope.id);
+    if (!inside.length) return null;
+    let x0 = Infinity;
+    let y0 = Infinity;
+    let x1 = -Infinity;
+    let y1 = -Infinity;
+    for (const n of inside) {
+      const b = this.nodeBox(n);
+      x0 = Math.min(x0, b.x - b.w / 2);
+      x1 = Math.max(x1, b.x + b.w / 2);
+      y0 = Math.min(y0, b.y - b.h / 2);
+      y1 = Math.max(y1, b.y + b.h / 2);
+    }
+    const pad = REGION_PAD;
+    return {
+      x: x0 - pad,
+      y: y0 - pad - REGION_LABEL_H,
+      w: x1 - x0 + pad * 2,
+      h: y1 - y0 + pad * 2 + REGION_LABEL_H,
+      count: inside.length,
+    };
+  }
+
+  /// An open scope: the region its nodes sit in, its name, and the control that
+  /// collapses it.
+  ///
+  /// The body takes no pointer events, because a rubber band has to be able to
+  /// start inside a scope and a region that swallowed the press would make every
+  /// selection inside an AS impossible. The label and the collapse control are
+  /// the only parts that can be hit.
+  drawRegion(layer, scope, box) {
+    if (!box) return;
+    const selected = this.ed.selection.has(scope.id);
+    const hue = scopeHue(scope);
+
+    const g = el('g', {
+      class: `scope-region${selected ? ' selected' : ''}`,
+      'data-region': scope.id,
+    });
+    g.appendChild(
+      el('rect', {
+        class: 'region-body',
+        x: box.x,
+        y: box.y,
+        width: box.w,
+        height: box.h,
+        rx: 16,
+        style: `--scope-hue:${hue}`,
+      }),
+    );
+    const caption = `${scope.name}  ·  AS ${scope.asn}`;
+    const label = el('g', { class: 'region-label', 'data-scope': scope.id });
+    // A chip behind the text, because a region's label can end up over another
+    // region's interface labels and plain text on top of those is unreadable.
+    label.appendChild(
+      el('rect', {
+        class: 'region-chip',
+        x: box.x + 8,
+        y: box.y + 5,
+        width: caption.length * 6.4 + 16,
+        height: 19,
+        rx: 6,
+        style: `--scope-hue:${hue}`,
+      }),
+    );
+    label.appendChild(
+      el('text', {
+        class: 'region-name',
+        x: box.x + 16,
+        y: box.y + 19,
+        style: `--scope-hue:${hue}`,
+      }, caption),
+    );
+    g.appendChild(label);
+
+    // One click, one meaning: this is the same edit the inspector's button makes
+    // and the same one the scope list's toggle makes.
+    const chev = el('g', { class: 'region-collapse', 'data-collapse': scope.id });
+    chev.appendChild(
+      el('rect', {
+        class: 'region-collapse-hit',
+        x: box.x + box.w - 30,
+        y: box.y + 4,
+        width: 24,
+        height: 20,
+        rx: 6,
+      }),
+    );
+    chev.appendChild(
+      el('text', {
+        class: 'region-collapse-mark',
+        x: box.x + box.w - 18,
+        y: box.y + 19,
+        'text-anchor': 'middle',
+      }, '⊟'),
+    );
+    chev.appendChild(el('title', {}, `Draw ${scope.name} as one node`));
+    g.appendChild(chev);
 
     layer.appendChild(g);
   }
@@ -595,13 +725,31 @@ export class Canvas {
     }
     if (ev.button !== 0) return;
     const at = this.point(ev);
+    const collapseEl = ev.target.closest?.('[data-collapse]');
+    const regionLabelEl = ev.target.closest?.('.region-label');
     const portEl = ev.target.closest?.('.port');
     const nodeEl = ev.target.closest?.('.node');
     const scopeEl = ev.target.closest?.('.scope-node');
     const linkEl = ev.target.closest?.('[data-link]');
 
+    // The control on an open scope's region, which is the same edit as the
+    // inspector's button and the scope list's toggle.
+    if (collapseEl) {
+      this.onCollapseScope(collapseEl.dataset.collapse);
+      return;
+    }
+    if (regionLabelEl) {
+      this.ed.select(regionLabelEl.dataset.scope, { add: ev.shiftKey });
+      return;
+    }
     if (portEl) {
-      this.drag = { kind: 'link', ifaceId: portEl.dataset.iface, from: at, to: at };
+      this.drag = {
+        kind: 'link',
+        ifaceId: portEl.dataset.iface,
+        from: at,
+        to: at,
+        moved: false,
+      };
       this.svg.classList.add('linking');
       this.render();
       return;
@@ -676,6 +824,13 @@ export class Canvas {
       this.render();
       return;
     }
+    if (this.drag.kind === 'link') {
+      // A press that never moves is a click on the port, not a cable being
+      // pulled out of it. Recorded here so `onUp` can tell the two apart.
+      const dx = at[0] - this.drag.from[0];
+      const dy = at[1] - this.drag.from[1];
+      if (Math.abs(dx) > 2 || Math.abs(dy) > 2) this.drag.moved = true;
+    }
     this.drag.to = at;
     this.render();
   }
@@ -737,6 +892,14 @@ export class Canvas {
     }
 
     if (drag.kind === 'link') {
+      // Clicked, not dragged: show the user what is on this port. It is the only
+      // way to reach a border port's own settings while its scope is drawn
+      // collapsed, because the nodes inside a collapsed scope are not on screen.
+      if (!drag.moved) {
+        this.ed.select(drag.ifaceId, { add: ev.shiftKey });
+        this.render();
+        return;
+      }
       const target = document.elementFromPoint(ev.clientX, ev.clientY);
       const portEl = target?.closest?.('.port');
       const nodeEl = target?.closest?.('.node');
@@ -792,6 +955,36 @@ export class Canvas {
     this.view.x = at[0] - (ev.clientX - r.left) / next;
     this.view.y = at[1] - (ev.clientY - r.top) / next;
     this.view.scale = next;
+    this.applyView();
+  }
+
+  /// Bring one box into view without changing the zoom.
+  ///
+  /// Used after collapsing a scope: the box that replaces the nodes has to be
+  /// where the user is looking, or the edit reads as "nothing happened". The
+  /// view moves only when the box is not already fully on screen, so collapsing
+  /// something in plain sight does not jump the canvas.
+  reveal(box, margin = 60) {
+    if (!box) return;
+    const r = this.svg.getBoundingClientRect();
+    const w = r.width / this.view.scale;
+    const h = r.height / this.view.scale;
+    const left = box.x - box.w / 2 - margin;
+    const right = box.x + box.w / 2 + margin;
+    const top = box.y - box.h / 2 - margin;
+    const bottom = box.y + box.h / 2 + margin;
+
+    if (right - left > w || bottom - top > h) {
+      // It does not fit at this zoom, so centring it is the best that can be
+      // done without deciding to zoom out on the user's behalf.
+      this.view.x = box.x - w / 2;
+      this.view.y = box.y - h / 2;
+    } else {
+      if (left < this.view.x) this.view.x = left;
+      if (right > this.view.x + w) this.view.x = right - w;
+      if (top < this.view.y) this.view.y = top;
+      if (bottom > this.view.y + h) this.view.y = bottom - h;
+    }
     this.applyView();
   }
 
@@ -854,6 +1047,19 @@ export class Canvas {
 }
 
 // ------------------------------------------------------------------ helpers
+
+/// A stable hue per scope, so two ASes side by side are told apart at a glance.
+///
+/// Derived from the AS number rather than from a palette index, so a scope keeps
+/// its colour when another is added or deleted, and the golden-ratio step keeps
+/// consecutive AS numbers far apart on the wheel rather than nearly the same.
+/// The wheel is cut at 300 degrees and offset past the reds, because a region
+/// tinted the same red as an error badge reads as a scope with something wrong
+/// with it.
+function scopeHue(scope) {
+  const n = Number(scope.asn) || 0;
+  return Math.round(30 + ((n * 137.508) % 300));
+}
 
 function el(name, attrs, text) {
   const node = document.createElementNS(SVG, name);

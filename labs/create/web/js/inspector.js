@@ -6,6 +6,11 @@
 // be visible as work rather than as the normal way to fill a node in.
 
 import { derivedValue, isPinned } from './doc.js';
+
+/// What the server uses when a project names no transit pool of its own. Shown
+/// as the field's value so the pool is never a blank the user has to know about,
+/// and kept in step with `model::DEFAULT_TRANSIT_POOL`.
+const DEFAULT_TRANSIT_POOL = '10.255.0.0/16';
 import { linkKind } from './canvas.js';
 
 export class Inspector {
@@ -26,7 +31,12 @@ export class Inspector {
     const nodes = this.ed.selectedNodes();
     const links = this.ed.selectedLinks();
     const scopeId = [...this.ed.selection].find((id) => id.startsWith('sc-'));
+    const ifaceId = [...this.ed.selection].find((id) => id.startsWith('if-'));
 
+    if (ifaceId && !nodes.length && !links.length) {
+      const found = this.ed.iface(ifaceId);
+      if (found) return this.port(found.node, found.iface);
+    }
     if (nodes.length === 1 && !links.length) return this.node(nodes[0]);
     if (links.length === 1 && !nodes.length) return this.link(links[0]);
     if (scopeId) return this.scope(this.ed.scope(scopeId));
@@ -55,6 +65,37 @@ export class Inspector {
         if (v && v !== t.name) this.ed.run({ op: 'set_project_name', name: v });
       })),
     );
+    // The one addressing decision that belongs to the project rather than to a
+    // scope: a /30 between two ASes is part of neither AS's network, so it comes
+    // from here.
+    this.root.appendChild(h3('Transit addressing'));
+    const transit = this.ed.doc.topology.transit_pool || '';
+    this.root.appendChild(
+      field(
+        'The pool a link between two scopes draws its /30 from',
+        textInput(transit || DEFAULT_TRANSIT_POOL, (v) => {
+          const next = v.trim();
+          const now = transit || DEFAULT_TRANSIT_POOL;
+          if (next === now) return;
+          this.ed.run({ op: 'set_transit_pool', pool: next ? next : null });
+        }, true),
+      ),
+    );
+    const crossing = (t.links || []).filter((l) => {
+      if (l.kind !== 'l3p2p') return false;
+      const a = this.ed.iface(l.a)?.node;
+      const b = this.ed.iface(l.b)?.node;
+      return a && b && a.scope !== b.scope;
+    }).length;
+    this.root.appendChild(
+      p(
+        'empty',
+        crossing
+          ? `${crossing} link(s) between scopes are addressed from it. A point-to-point link inside one scope is filled by that scope's own plan instead.`
+          : 'Nothing uses it yet. Link a router in one scope to a router in another and both ends take one /30 out of it.',
+      ),
+    );
+
     this.root.appendChild(h3('Scopes'));
     for (const s of t.scopes) {
       const row = document.createElement('div');
@@ -138,6 +179,23 @@ export class Inspector {
     del.className = 'danger';
     del.style.marginTop = '14px';
     r.appendChild(del);
+  }
+
+  /// One interface on its own, which is what clicking a port shows.
+  ///
+  /// The case this exists for is a border port on a collapsed scope: the node it
+  /// belongs to is not drawn, so there is no way to reach its settings without
+  /// opening the scope first. It reuses the same editor the node panel uses, so
+  /// there is one place that knows what an interface can be.
+  port(node, iface) {
+    const r = this.root;
+    const scope = this.ed.scope(node.scope);
+    r.appendChild(h2(derivedValue(iface.name) || 'interface'));
+    r.appendChild(
+      p('empty', `on ${node.name}${scope ? `, in ${scope.name} (AS ${scope.asn})` : ''}`),
+    );
+    r.appendChild(this.iface(node, iface));
+    r.appendChild(button(`Show ${node.name}`, () => this.ed.select(node.id)));
   }
 
   iface(node, iface) {
@@ -453,10 +511,53 @@ export class Inspector {
     if (!scope) return;
     const r = this.root;
     r.appendChild(h2(`Scope ${scope.name}`));
+    const count = this.ed.nodesInScope(scope.id).length;
     r.appendChild(
-      p('empty', 'A scope is one AS number, one subnet, and the plan that fills it.'),
+      p(
+        'empty',
+        `One AS number, one subnet, and the plan that fills it. ${count} node(s) inside.`,
+      ),
     );
 
+    // What the scope looks like on the canvas comes first, because it is the
+    // thing a user reaches for straight after making one. It used to sit below
+    // the whole address plan, off the bottom of the panel on a laptop screen.
+    r.appendChild(h3('On the canvas'));
+    const collapsed = this.ed.isCollapsed(scope.id);
+    const view = document.createElement('div');
+    view.className = 'row';
+    view.appendChild(
+      button(
+        collapsed ? `Open it up (${count} nodes)` : 'Draw it as one node',
+        () => this.ui.setCollapsed(scope.id, !collapsed),
+      ),
+    );
+    view.appendChild(button('Look inside', () => this.ui.focusScope(scope.id)));
+    r.appendChild(view);
+    r.appendChild(
+      p(
+        'empty',
+        collapsed
+          ? 'Its nodes are hidden and it draws as one box. A link from outside lands on a border port.'
+          : 'Its nodes are on the canvas inside a tinted region. Drawing it as one node hides them and leaves one box.',
+      ),
+    );
+
+    const ports = this.ed
+      .nodesInScope(scope.id)
+      .flatMap((n) =>
+        (n.interfaces || []).filter((i) => i.external).map((i) => `${i.external} (${n.name})`),
+      );
+    r.appendChild(
+      p(
+        'empty',
+        ports.length
+          ? `Border ports: ${ports.join(', ')}`
+          : 'No border ports. A link from outside has nowhere defined to land while this scope is collapsed, and a pull from a blueprint would drop it.',
+      ),
+    );
+
+    r.appendChild(h3('Addressing'));
     const patch = (fields) => this.ed.run({ op: 'update_scope', scope: scope.id, ...fields });
 
     r.appendChild(field('Name', textInput(scope.name, (v) => patch({ name: v }))));
@@ -496,31 +597,6 @@ export class Inspector {
     const renumber = button('Renumber this scope', () => this.ui.renumberDialog(scope));
     renumber.style.marginTop = '12px';
     r.appendChild(renumber);
-
-    r.appendChild(h3('On the canvas'));
-    const collapsed = this.ed.isCollapsed(scope.id);
-    const view = document.createElement('div');
-    view.className = 'row';
-    view.appendChild(
-      button(collapsed ? 'Open it up' : 'Draw it as one node', () =>
-        this.ed.run({ op: 'set_collapsed', scope: scope.id, collapsed: !collapsed }),
-      ),
-    );
-    view.appendChild(
-      button('Look inside', () => this.ui.focusScope(scope.id)),
-    );
-    r.appendChild(view);
-    const ports = this.ed
-      .nodesInScope(scope.id)
-      .flatMap((n) => (n.interfaces || []).filter((i) => i.external).map((i) => `${i.external} (${n.name})`));
-    r.appendChild(
-      p(
-        'empty',
-        ports.length
-          ? `Border ports: ${ports.join(', ')}`
-          : 'No border ports. A link from outside has nowhere defined to land while this scope is collapsed, and a pull from a blueprint would drop it.',
-      ),
-    );
 
     this.blueprintSection(scope);
   }
@@ -583,6 +659,32 @@ export class Inspector {
         this.ui.groupIntoScope(nodes.map((n) => n.id)),
       );
       r.appendChild(group);
+
+      // Moving a selection into a scope that already exists had no control at
+      // all: the only bulk operation made a new scope, and the per-node dropdown
+      // only appears when exactly one node is selected.
+      const others = this.ed.doc.topology.scopes;
+      if (others.length) {
+        const current = new Set(nodes.map((n) => n.scope));
+        r.appendChild(
+          field(
+            'Or move them into one that exists',
+            select(
+              [['', 'Choose a scope…'], ...others.map((sc) => [sc.id, `${sc.name} (AS ${sc.asn})`])],
+              current.size === 1 ? [...current][0] : '',
+              (v) => {
+                if (!v) return;
+                this.ed.run(
+                  nodes
+                    .filter((n) => n.scope !== v)
+                    .map((n) => ({ op: 'set_node_scope', node: n.id, scope: v })),
+                  { label: `move ${nodes.length} node(s) into another scope` },
+                );
+              },
+            ),
+          ),
+        );
+      }
 
       r.appendChild(h3('Align'));
       const row = document.createElement('div');
